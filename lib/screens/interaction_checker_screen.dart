@@ -253,6 +253,8 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
 
   Widget _buildSelectedMedicationsList() {
     final medications = context.watch<AppState>().medications;
+    final interactions = context.watch<AppState>().interactions;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -281,7 +283,7 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
             ),
           ),
           const SizedBox(height: 16),
-        ] else ...[
+        ] else ...[          
           const Center(
             child: Padding(
               padding: EdgeInsets.symmetric(vertical: 16.0),
@@ -372,7 +374,7 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
                         )
                       else if (_searchResults.isNotEmpty)
                         _buildSearchResults(),
-                      if (interactions.isNotEmpty) ...[                        
+                      if (context.read<AppState>().medications.length >= 2) ...[                        
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 16.0),
                           child: Text(
@@ -380,7 +382,44 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
                             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                         ),
-                        _buildInteractionResults(interactions),
+                        if (interactions.any((i) => i['severity']?.toLowerCase() == 'high'))
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.warning_rounded, color: Colors.red.shade700),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'High severity interactions detected',
+                                    style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (interactions.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Card(
+                              child: Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: Text(
+                                  'No interactions found between your medications - it appears safe to take them together',
+                                  style: TextStyle(fontSize: 16),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          _buildInteractionResults(interactions),
                       ],
                     ],
                   ),
