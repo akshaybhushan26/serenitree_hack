@@ -1,11 +1,107 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_state.dart';
+import '../services/audio_service.dart';
 
-class MeditationScreen extends StatelessWidget {
+class MeditationScreen extends StatefulWidget {
   const MeditationScreen({super.key});
 
   @override
+  State<MeditationScreen> createState() => _MeditationScreenState();
+}
+
+class _MeditationScreenState extends State<MeditationScreen> {
+  String? _currentAudioId;
+
+  final List<Map<String, dynamic>> _meditations = [
+    {
+      'title': 'Morning Meditation',
+      'description': 'Start your day with mindfulness and clarity.',
+      'duration': '10 minutes',
+      'audioUrl': 'assets/audio/morning_meditation.mp3',
+      'icon': Icons.wb_sunny,
+    },
+    {
+      'title': 'Stress Relief',
+      'description': 'Release tension and find inner peace.',
+      'duration': '15 minutes',
+      'audioUrl': 'assets/audio/stress_relief.mp3',
+      'icon': Icons.spa,
+    },
+    {
+      'title': 'Sleep Well',
+      'description': 'Gentle guidance into restful sleep.',
+      'duration': '20 minutes',
+      'audioUrl': 'assets/audio/sleep_well.mp3',
+      'icon': Icons.nightlight_round,
+    },
+    {
+      'title': 'Focus & Clarity',
+      'description': 'Sharpen your mind and enhance concentration.',
+      'duration': '12 minutes',
+      'audioUrl': 'assets/audio/focus_clarity.mp3',
+      'icon': Icons.lens_blur,
+    },
+  ];
+
+  @override
+  void dispose() {
+    if (_currentAudioId != null) {
+      AudioService().stop(_currentAudioId!);
+    }
+    super.dispose();
+  }
+
+  Future<void> _playMeditation(Map<String, dynamic> meditation) async {
+    final audioService = AudioService();
+    final meditationId = meditation['title'].toString().toLowerCase().replaceAll(' ', '_');
+
+    // Stop current meditation if any
+    if (_currentAudioId != null) {
+      await audioService.stop(_currentAudioId!);
+    }
+
+    try {
+      await audioService.playAsset(meditationId, meditation['audioUrl']);
+      setState(() {
+        _currentAudioId = meditationId;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Playing ${meditation['title']}'),
+          action: SnackBarAction(
+            label: 'Stop',
+            onPressed: () async {
+              await audioService.stop(meditationId);
+              setState(() {
+                _currentAudioId = null;
+              });
+            },
+          ),
+        ),
+      );
+
+      // Update meditation minutes in app state
+      final minutes = int.tryParse(meditation['duration'].split(' ')[0]) ?? 0;
+      context.read<AppState>().addMeditationMinutes(minutes);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error playing audio: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final totalMinutes = context.watch<AppState>().meditationMinutes;
+
     return Scaffold(
       body: SafeArea(
         child: CustomScrollView(
@@ -17,7 +113,7 @@ class MeditationScreen extends StatelessWidget {
               padding: const EdgeInsets.all(16.0),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  _buildBreathingCircle(context),
+                  _buildProgressCard(context, totalMinutes),
                   const SizedBox(height: 24),
                   _buildMeditationList(context),
                 ]),
@@ -29,69 +125,52 @@ class MeditationScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBreathingCircle(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        children: [
-          const Text(
-            'Breathing Exercise',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ).animate()
-            .fadeIn()
-            .slideY(begin: -0.2, end: 0),
-          const SizedBox(height: 24),
-          Container(
-            width: 150,
-            height: 150,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Theme.of(context).colorScheme.secondary,
-                width: 3,
+  Widget _buildProgressCard(BuildContext context, int totalMinutes) {
+    return Card(
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Theme.of(context).colorScheme.primary,
+              Theme.of(context).colorScheme.secondary,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.self_improvement,
+              color: Colors.white,
+              size: 48,
+            ).animate()
+              .scale(duration: 600.ms, curve: Curves.easeOutBack),
+            const SizedBox(height: 16),
+            Text(
+              '$totalMinutes',
+              style: const TextStyle(
+                fontSize: 48,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
-            ),
-            child: Center(
-              child: Icon(
-                Icons.self_improvement,
-                size: 64,
-                color: Theme.of(context).colorScheme.secondary,
+            ).animate()
+              .fadeIn(delay: 200.ms)
+              .slideX(begin: -0.2, end: 0),
+            const Text(
+              'Minutes Meditated',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white70,
               ),
-            ),
-          ).animate(
-            onPlay: (controller) => controller.repeat(),
-          )
-            .scaleXY(
-              duration: 4.seconds,
-              curve: Curves.easeInOut,
-              begin: 0.8,
-              end: 1.2,
-            )
-            .then()
-            .scaleXY(
-              duration: 4.seconds,
-              curve: Curves.easeInOut,
-              begin: 1.2,
-              end: 0.8,
-            ),
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: () {
-              // Start breathing exercise
-            },
-            icon: const Icon(Icons.play_arrow),
-            label: const Text('Start Breathing'),
-          ).animate()
-            .fadeIn(delay: 400.ms)
-            .slideY(begin: 0.2, end: 0),
-        ],
+            ).animate()
+              .fadeIn(delay: 400.ms)
+              .slideX(begin: -0.2, end: 0),
+          ],
+        ),
       ),
     ).animate()
       .fadeIn()
@@ -99,121 +178,71 @@ class MeditationScreen extends StatelessWidget {
   }
 
   Widget _buildMeditationList(BuildContext context) {
-    final meditations = [
-      {
-        'title': 'Mindful Breathing',
-        'description': 'Focus on your breath to calm your mind',
-        'duration': '5 min',
-        'color': Colors.blue[100],
-        'icon': Icons.air,
-      },
-      {
-        'title': 'Body Scan',
-        'description': 'Release tension throughout your body',
-        'duration': '10 min',
-        'color': Colors.green[100],
-        'icon': Icons.accessibility_new,
-      },
-      {
-        'title': 'Loving Kindness',
-        'description': 'Cultivate compassion for yourself and others',
-        'duration': '15 min',
-        'color': Colors.pink[100],
-        'icon': Icons.favorite,
-      },
-      {
-        'title': 'Mindful Walking',
-        'description': 'Practice mindfulness while walking',
-        'duration': '10 min',
-        'color': Colors.orange[100],
-        'icon': Icons.directions_walk,
-      },
-    ];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Meditations',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(context).textTheme.titleLarge,
         ).animate()
           .fadeIn()
           .slideX(begin: -0.2, end: 0),
         const SizedBox(height: 16),
-        ...meditations.asMap().entries.map((entry) {
+        ..._meditations.asMap().entries.map((entry) {
           final index = entry.key;
           final meditation = entry.value;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          final isPlaying = _currentAudioId == meditation['title'].toString().toLowerCase().replaceAll(' ', '_');
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 16),
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(16),
+              leading: Icon(
+                meditation['icon'] as IconData,
+                size: 32,
+                color: Theme.of(context).colorScheme.primary,
               ),
-              child: InkWell(
-                onTap: () {
-                  // Start meditation
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: meditation['color'] as Color?,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          meditation['icon'] as IconData,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              meditation['title'] as String,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              meditation['description'] as String,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Chip(
-                        label: Text(meditation['duration'] as String),
-                        backgroundColor: Colors.white,
-                      ),
-                    ],
-                  ),
+              title: Text(
+                meditation['title'],
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 8),
+                  Text(meditation['description']),
+                  const SizedBox(height: 4),
+                  Text(
+                    meditation['duration'],
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              trailing: IconButton(
+                icon: Icon(isPlaying ? Icons.stop_circle : Icons.play_circle_outline),
+                iconSize: 32,
+                onPressed: () async {
+                  if (isPlaying) {
+                    await AudioService().stop(_currentAudioId!);
+                    setState(() {
+                      _currentAudioId = null;
+                    });
+                  } else {
+                    await _playMeditation(meditation);
+                  }
+                },
               ),
             ),
           ).animate(delay: Duration(milliseconds: 100 * index))
             .fadeIn()
-            .slideX(begin: 0.2, end: 0);
-        }),
+            .slideX();
+        }).toList(),
       ],
     );
   }

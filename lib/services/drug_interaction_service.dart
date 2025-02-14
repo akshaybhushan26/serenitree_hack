@@ -159,9 +159,7 @@ class DrugInteractionService {
 
     try {
       final searchQuery = Uri.encodeComponent(
-        'openfda.brand_name:"${query.trim()}" OR ' +
-        'openfda.brand_name:"${query.trim()}*" OR ' +
-        'openfda.generic_name:"${query.trim()}" OR ' +
+        'openfda.brand_name:"${query.trim()}" OR ' 'openfda.brand_name:"${query.trim()}*" OR ' 'openfda.generic_name:"${query.trim()}" OR ' +
         'openfda.generic_name:"${query.trim()}*"'
       );
 

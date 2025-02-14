@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
-import 'package:serenitree_hack/screens/camera_preview_screen.dart';
-import 'package:serenitree_hack/screens/chatbot_screen.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../providers/app_state.dart';
+import 'camera_preview_screen.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -20,78 +16,210 @@ class ScanScreen extends StatefulWidget {
 class _ScanScreenState extends State<ScanScreen> {
   bool _isScanning = false;
   String _error = '';
+  final ImagePicker _picker = ImagePicker();
+  final TextRecognizer _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
 
-  Future<void> _handleScannedMedications(BuildContext context, List<Map<String, String>> medications) async {
+  Future<void> _scanAndProcessImage(BuildContext context) async {
     setState(() {
       _isScanning = true;
       _error = '';
     });
 
     try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 2400,
+        maxHeight: 3200,
+        imageQuality: 100,
+      );
+      if (image == null) {
+        setState(() {
+          _isScanning = false;
+          _error = 'No image selected';
+        });
+        return;
+      }
+
+      await _processImage(image);
+    } catch (e) {
+      setState(() {
+        _error = 'Error processing image: ${e.toString()}';
+        _isScanning = false;
+      });
+    }
+  }
+
+  Future<void> _processImage(XFile image) async {
+    try {
+      debugPrint('Starting image processing from path: ${image.path}');
+      
+      final inputImage = InputImage.fromFilePath(image.path);
+      final RecognizedText recognizedText = await _textRecognizer.processImage(inputImage);
+      
+      debugPrint('Raw recognized text:\n${recognizedText.text}');
+      debugPrint('Number of text blocks: ${recognizedText.blocks.length}');
+      
+      for (final block in recognizedText.blocks) {
+        debugPrint('Block text: ${block.text}');
+        debugPrint('Block corner points: ${block.cornerPoints}');
+        debugPrint('Block languages: ${block.recognizedLanguages}');
+        
+        for (final line in block.lines) {
+          debugPrint('Line text: ${line.text}');
+          debugPrint('Line corner points: ${line.cornerPoints}');
+        }
+      }
+
+      if (recognizedText.text.isEmpty) {
+        setState(() {
+          _error = 'No text detected in the image. Please ensure the prescription is well-lit and clearly visible.';
+          _isScanning = false;
+        });
+        return;
+      }
+
+      final medications = _extractMedicationsFromText(recognizedText.text);
+
+      debugPrint('Extracted medications: $medications');
+
+      if (medications.isEmpty) {
+        setState(() {
+          _error = 'No medications found in the image. Please ensure the prescription is clear and contains medication details.';
+          _isScanning = false;
+        });
+        return;
+      }
+
+      await _handleScannedMedications(context, medications);
+    } catch (e) {
+      debugPrint('Error during image processing: $e');
+      if (mounted) {
+        setState(() {
+          _error = 'Error processing image: ${e.toString()}';
+          _isScanning = false;
+        });
+      }
+    }
+  }
+
+  List<Map<String, String>> _extractMedicationsFromText(String text) {
+    debugPrint('Extracting medications from text block:\n$text');
+    
+    final List<Map<String, String>> medications = [];
+    
+    // Normalize text
+    text = text.replaceAll(RegExp(r'[\u2018\u2019]'), "'")
+             .replaceAll(RegExp(r'[\u201C\u201D]'), '"')
+             .replaceAll(RegExp(r'[^\w\s.,;:\/\-()%+]'), ' ')
+             .replaceAll(RegExp(r'\s+'), ' ')
+             .trim();
+
+    // Split into lines and process each line
+    final lines = text.split(RegExp(r'[\n\r]+'));
+    
+    // Pattern to match medication entries (specifically for the prescription format)
+    final medicationPattern = RegExp(
+      r'\b(?:TAB|CAP|INJ|SYR|SUSP|SOL|OINT|GEL|DROP|CREAM)\s+([A-Z0-9\s-]+(?:\s+(?:CR|SR|XR|ER|IR|PR|MR|DR|XL|LA|HD|HS|DS|ES|XT|CD|TR|HCT|Plus|Forte|Junior|Adult|Pediatric|Max))?)(?:\s+(?:\d+(?:\.\d+)?\s*(?:MG|MCG|ML|G|IU|%)))?\b',
+      caseSensitive: true
+    );
+
+    // Pattern to match dosage information
+    final dosagePattern = RegExp(
+      r'\b(?:\d+(?:\.\d+)?\s*(?:MG|MCG|ML|G|IU|%)|(?:HALF|ONE|TWO|THREE|FOUR|FIVE)\s+(?:TAB|CAP|ML|TABLET|CAPSULE)S?)\b',
+      caseSensitive: true
+    );
+
+    // Pattern to match frequency information
+    final frequencyPattern = RegExp(
+      r'\b(?:ONCE|TWICE|THRICE|DAILY|WEEKLY|MONTHLY|(?:IN|AT)\s+(?:MORNING|NIGHT|EVENING|AFTERNOON)|(?:BEFORE|AFTER)\s+(?:MEAL|FOOD)|(?:\d+\s*TIMES?\s*(?:A|PER)?\s*DAY)|SOS|PRN)\b',
+      caseSensitive: true
+    );
+
+    String? currentMedication;
+    String? currentDosage;
+    String? currentFrequency;
+
+    for (String line in lines) {
+      line = line.trim();
+      if (line.isEmpty) continue;
+
+      // Check for medication name
+      final medMatch = medicationPattern.firstMatch(line);
+      if (medMatch != null) {
+        // Save previous medication if exists
+        if (currentMedication != null) {
+          medications.add({
+            'name': currentMedication,
+            'dosage': currentDosage ?? 'As prescribed',
+            'frequency': currentFrequency ?? 'Daily'
+          });
+        }
+
+        // Start new medication
+        currentMedication = line.trim();
+        currentDosage = null;
+        currentFrequency = null;
+        continue;
+      }
+
+      // Check for dosage
+      if (currentMedication != null) {
+        final dosageMatch = dosagePattern.firstMatch(line);
+        if (dosageMatch != null) {
+          currentDosage = line.trim();
+          continue;
+        }
+
+        // Check for frequency
+        final freqMatch = frequencyPattern.firstMatch(line);
+        if (freqMatch != null) {
+          currentFrequency = line.trim();
+        }
+      }
+    }
+
+    // Add the last medication if exists
+    if (currentMedication != null) {
+      medications.add({
+        'name': currentMedication,
+        'dosage': currentDosage ?? 'As prescribed',
+        'frequency': currentFrequency ?? 'Daily'
+      });
+    }
+
+    return medications;
+  }
+
+  Future<void> _handleScannedMedications(BuildContext context, List<Map<String, String>> medications) async {
+    try {
       final appState = Provider.of<AppState>(context, listen: false);
       int successCount = 0;
-      List<String> errorMessages = [];
 
       for (final medication in medications) {
         final name = medication['name']?.trim() ?? '';
-        final dosage = medication['dosage']?.trim() ?? '';
+        if (name.isEmpty) continue;
+
+        // Extract actual medication name by removing common prefixes
+        final cleanName = name.replaceAll(RegExp(r'^(?:TAB|CAP|INJ|SYR|SUSP|SOL|OINT|GEL|DROP|CREAM)\s+'), '');
         
-        if (name.isEmpty) {
-          errorMessages.add('Invalid medication name detected');
-          continue;
-        }
-
-        if (dosage.isNotEmpty && !RegExp(r'^[0-9]+(.?[0-9]*)?s*(mg|g|ml|mcg|IU|tablet(s)?|capsule(s)?|pill(s)?|dose(s)?)$', caseSensitive: false).hasMatch(dosage)) {
-          errorMessages.add('Invalid dosage format for $name');
-          continue;
-        }
-        
-        final defaultTime = TimeOfDay(hour: 8, minute: 0);
-        TimeOfDay medicationTime = defaultTime;
-
-        if (medication['time'] != null && medication['time']!.isNotEmpty) {
-          final timeStr = medication['time']!.trim();
-          if (RegExp(r'^\d{1,2}:\d{2}$').hasMatch(timeStr)) {
-            try {
-              final timeParts = timeStr.split(':');
-              final hour = int.parse(timeParts[0]);
-              final minute = int.parse(timeParts[1]);
-              if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
-                medicationTime = TimeOfDay(hour: hour, minute: minute);
-              } else {
-                errorMessages.add('Invalid time format for $name: Hour must be 0-23, minute must be 0-59');
-              }
-            } catch (e) {
-              errorMessages.add('Invalid time format for $name. Using default time (8:00 AM)');
-            }
-          }
-        }
-
-        appState.addMedication(
-          name: name,
-          dosage: dosage.isNotEmpty ? dosage : 'Not specified',
-          frequency: medication['frequency']?.trim().isNotEmpty == true
-              ? medication['frequency']!.trim()
-              : 'Daily',
-          time: medicationTime
+        await appState.addMedication(
+          name: cleanName,
+          dosage: medication['dosage']?.trim() ?? 'As prescribed',
+          frequency: medication['frequency']?.trim() ?? 'Daily',
+          time: const TimeOfDay(hour: 8, minute: 0)
         );
         successCount++;
       }
 
       if (successCount > 0) {
-        String message = 'Successfully added $successCount medication(s)';
-        if (errorMessages.isNotEmpty) {
-          message += '\nWarnings: ${errorMessages.join('. ')}';
-        }
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
+          SnackBar(content: Text('Successfully added $successCount medication(s)')),
         );
         Navigator.pop(context);
       } else {
         setState(() {
-          _error = errorMessages.isEmpty 
-              ? 'No valid medications found in the scan. Please try again.'
-              : errorMessages.join('\n');
+          _error = 'No valid medications found in the scan. Please try again.';
         });
       }
     } catch (e) {
@@ -105,347 +233,172 @@ class _ScanScreenState extends State<ScanScreen> {
     }
   }
 
-  Future<List<Map<String, String>>> _analyzeWithAI(String text) async {
-    try {
-      // You would replace this URL with your actual AI service endpoint
-      final response = await http.post(
-        Uri.parse('https://api.openai.com/v1/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer YOUR_API_KEY', // Replace with actual API key
-        },
-        body: jsonEncode({
-          'model': 'gpt-3.5-turbo',
-          'messages': [
-            {
-              'role': 'system',
-              'content': 'You are a medical prescription analyzer. Extract medication names, dosages, and frequencies from the following text. Return the data in a structured format.'
-            },
-            {
-              'role': 'user',
-              'content': text
-            }
-          ],
-          'temperature': 0.3,
-          'max_tokens': 500
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        final aiAnalysis = jsonResponse['choices'][0]['message']['content'];
-        
-        // Parse the AI response and convert it to our medication format
-        // This is a simplified example - you would need to parse the actual AI response
-        final List<Map<String, String>> medications = [];
-        // Add parsing logic here based on AI response format
-        
-        return medications;
-      } else {
-        throw Exception('Failed to analyze with AI: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('AI Analysis Error: $e');
-      return [];
-    }
-  }
-
-  Future<void> _showMedicationDetails(Map<String, String> medication) async {
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(medication['name'] ?? 'Medication Details'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (medication['dosage'] != null) ...[                
-                Text('Dosage:', style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(medication['dosage']!),
-                SizedBox(height: 8),
-              ],
-              if (medication['frequency'] != null) ...[                
-                Text('Frequency:', style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(medication['frequency']!),
-                SizedBox(height: 8),
-              ],
-              if (medication['instructions'] != null) ...[                
-                Text('Instructions:', style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(medication['instructions']!),
-                SizedBox(height: 8),
-              ],
-              if (medication['side_effects'] != null) ...[                
-                Text('Common Side Effects:', style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(medication['side_effects']!),
-                SizedBox(height: 8),
-              ],
-              if (medication['warnings'] != null) ...[                
-                Text('Important Warnings:', style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(medication['warnings']!),
-                SizedBox(height: 8),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('Close'),
-          ),
-          TextButton(
-            onPressed: () {
-              final appState = Provider.of<AppState>(context, listen: false);
-              appState.addMedication(
-                name: medication['name'] ?? '',
-                dosage: medication['dosage'] ?? 'Not specified',
-                frequency: medication['frequency'] ?? 'Daily',
-                time: TimeOfDay(hour: 8, minute: 0)
-              );
-              Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Medication added to your list')),
-              );
-            },
-            child: Text('Add to My Medications'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _processImage(XFile? image) async {
-    if (image == null) return;
-
-    try {
-      final inputImage = InputImage.fromFilePath(image.path);
-      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      
-      try {
-        final recognizedText = await textRecognizer.processImage(inputImage);
-        final text = recognizedText.text;
-        
-        // First try AI analysis
-        final aiMedications = await _analyzeWithAI(text);
-        if (aiMedications.isNotEmpty) {
-          await _handleScannedMedications(context, aiMedications);
-          return;
-        }
-        
-        // Fallback to regex pattern if AI analysis fails
-        final medicationPattern = RegExp(
-          r'([A-Za-z\s-]+(?:\s*\([^)]*\))?)s*' +
-          r'(?:(\d+(?:\.\d+)?\s*(?:mg|g|ml|mcg|IU|tablet(?:s)?|capsule(?:s)?|pill(?:s)?|dose(?:s)?)(?:\s*\([^)]*\))?))?s*' +
-          r'(?:((?:Once|Twice|Thrice|\d+\s+times?|Every|Each|Per|q\.?d\.?|b\.?i\.?d\.?)\s*' +
-          r'(?:daily|day|morning|evening|night|afternoon|hour(?:s)?|week(?:ly)?|month(?:ly)?|prn|as\s+needed))?)',
-          caseSensitive: false
-        );
-        
-        final matches = medicationPattern.allMatches(text);
-        final detectedMedications = matches.map((match) => <String, String>{
-          'name': match.group(1)?.trim() ?? '',
-          'dosage': match.group(2)?.trim() ?? '',
-          'frequency': match.group(3)?.trim() ?? '',
-          'time': ''
-        }).where((med) => med['name']!.isNotEmpty).toList();
-        
-        if (detectedMedications.isNotEmpty) {
-          await _handleScannedMedications(context, detectedMedications);
-        } else {
-          setState(() {
-            _error = 'No medications detected. Please ensure the prescription is clearly visible and try again.';
-            _isScanning = false;
-          });
-        }
-      } finally {
-        textRecognizer.close();
-      }
-    } catch (e) {
-      setState(() {
-        _error = 'Failed to process prescription: ${e.toString()}';
-        _isScanning = false;
-      });
-    }
-  }
-
-  void _scanAndProcessImage(BuildContext context) async {
-    setState(() {
-      _isScanning = true;
-      _error = '';
-    });
-
-    try {
-      final result = await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const CameraPreviewScreen(),
-        ),
-      );
-
-      if (result != null) {
-        final image = result as XFile;
-        final inputImage = InputImage.fromFilePath(image.path);
-        final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-        
-        try {
-          final recognizedText = await textRecognizer.processImage(inputImage);
-          final text = recognizedText.text;
-          
-          // Extract medication information using regex patterns
-          // More flexible pattern to detect medications
-          final medicationPattern = RegExp(
-            r'([A-Za-z\s-]+(?:\s*\([^)]*\))?)s*' + // Medication name with optional parenthetical info
-            r'(?:(d+(?:\.\d+)?\s*(?:mg|g|ml|mcg|IU|tablet(?:s)?|capsule(?:s)?|pill(?:s)?|dose(?:s)?)(?:\s*\([^)]*\))?))?s*' + // Dosage with units and optional notes
-            r'(?:((?:Once|Twice|Thrice|\d+\s+times?|Every|Each|Per|q\.?d\.?|b\.?i\.?d\.?)\s*' + // Frequency with medical abbreviations
-            r'(?:daily|day|morning|evening|night|afternoon|hour(?:s)?|week(?:ly)?|month(?:ly)?|prn|as\s+needed))?)', // Time periods
-            caseSensitive: false
-          );
-          
-          final matches = medicationPattern.allMatches(text);
-          final detectedMedications = matches.map((match) => <String, String>{
-            'name': match.group(1)?.trim() ?? '',
-            'dosage': match.group(2)?.trim() ?? '',
-            'frequency': match.group(3)?.trim() ?? '',
-            'time': ''
-          }).where((med) => med['name']!.isNotEmpty).toList();
-          
-          if (detectedMedications.isNotEmpty) {
-            await _handleScannedMedications(context, detectedMedications.cast<Map<String, String>>());
-          } else {
-            setState(() {
-              _error = 'No medications detected. Please ensure the prescription is clearly visible and try again.';
-              _isScanning = false;
-            });
-          }
-        } finally {
-          textRecognizer.close();
-        }
-      } else {
-        setState(() {
-          _error = 'Scanning cancelled';
-          _isScanning = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _error = 'Failed to scan prescription: ${e.toString()}';
-        _isScanning = false;
-      });
-    }
+  @override
+  void dispose() {
+    _textRecognizer.close();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            const SliverAppBar.large(
-              title: Text('Scan Prescription'),
-            ),
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+              Theme.of(context).colorScheme.surface,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const Text(
+                      'Scan Prescription',
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 32),
+                Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-
-                      if (_isScanning)
-                        const CircularProgressIndicator()
-                      else
-                        Icon(
-                          Icons.document_scanner,
-                          size: 100,
-                          color: Theme.of(context).colorScheme.primary,
-                        ).animate()
-                          .scale(duration: 600.ms, curve: Curves.easeOutBack),
-                      const SizedBox(height: 24),
                       if (_error.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.all(16),
+                          margin: const EdgeInsets.only(bottom: 24.0),
+                          padding: const EdgeInsets.all(16.0),
                           decoration: BoxDecoration(
                             color: Theme.of(context).colorScheme.errorContainer,
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Text(
-                            _error,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onErrorContainer,
-                            ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _error,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ).animate()
-                          .fadeIn()
-                          .slideY(begin: 0.2, end: 0),
-                      if (_error.isNotEmpty)
-                        const SizedBox(height: 24),
-                      const Text(
-                        'Scan your prescription',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ).animate()
-                        .fadeIn(),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Your medications will be automatically added',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey,
-                        ),
-                      ).animate()
-                        .fadeIn(delay: 200.ms),
-                      const SizedBox(height: 32),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: _isScanning ? null : () => _scanAndProcessImage(context),
-                            icon: const Icon(Icons.camera_alt),
-                            label: Text(_isScanning ? 'Scanning...' : 'Use Camera'),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ).animate().fadeIn(),
+                      Container(
+                        padding: const EdgeInsets.all(32.0),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Theme.of(context).shadowColor.withOpacity(0.1),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
                             ),
-                          ).animate()
-                            .fadeIn(delay: 400.ms)
-                            .scale(delay: 400.ms),
-                          const SizedBox(width: 16),
-                          ElevatedButton.icon(
-                            onPressed: _isScanning
-                                ? null
-                                : () async {
-                                    final picker = ImagePicker();
-                                    final XFile? image = await picker.pickImage(
-                                      source: ImageSource.gallery,
-                                      imageQuality: 100,
-                                    );
-                                    if (image != null) {
-                                      setState(() {
-                                        _isScanning = true;
-                                        _error = '';
-                                      });
-                                      await _processImage(image);
-                                    }
-                                  },
-                            icon: const Icon(Icons.photo_library),
-                            label: const Text('From Gallery'),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.document_scanner,
+                              size: 64,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
-                          ).animate()
-                            .fadeIn(delay: 600.ms)
-                            .scale(delay: 600.ms),
-                        ],
-                      ),
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Choose Scan Method',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            FilledButton.icon(
+                              onPressed: _isScanning
+                                  ? null
+                                  : () async {
+                                      final image = await Navigator.push<XFile?>(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => const CameraPreviewScreen(),
+                                        ),
+                                      );
+                                      if (image != null) {
+                                        setState(() {
+                                          _isScanning = true;
+                                          _error = '';
+                                        });
+                                        await _processImage(image);
+                                      }
+                                    },
+                              icon: const Icon(Icons.camera_alt),
+                              label: const Text('Scan with Camera'),
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 32,
+                                  vertical: 16,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            OutlinedButton.icon(
+                              onPressed: _isScanning ? null : () => _scanAndProcessImage(context),
+                              icon: const Icon(Icons.photo_library),
+                              label: const Text('Import from Gallery'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 32,
+                                  vertical: 16,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ).animate().slideY(
+                            begin: 0.3,
+                            duration: const Duration(milliseconds: 500),
+                          ),
+                      if (_isScanning)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 32.0),
+                          child: Column(
+                            children: [
+                              const CircularProgressIndicator(),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Processing image...',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.secondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ).animate().fadeIn(),
                     ],
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

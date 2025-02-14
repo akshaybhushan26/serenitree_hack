@@ -4,9 +4,18 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../widgets/add_medication_dialog.dart';
 import '../widgets/edit_medication_dialog.dart';
+import '../screens/scan_screen.dart';
+import '../screens/interaction_checker_screen.dart';
 
 class MedicationListScreen extends StatelessWidget {
   const MedicationListScreen({super.key});
+
+  String _formatTime(TimeOfDay time) {
+    final hour = time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,8 +23,30 @@ class MedicationListScreen extends StatelessWidget {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            const SliverAppBar.large(
-              title: Text('Medications'),
+            SliverAppBar(
+              title: const Text('Medications'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.document_scanner),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ScanScreen()),
+                    );
+                  },
+                  tooltip: 'Scan Prescription',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.compare_arrows),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const InteractionCheckerScreen()),
+                    );
+                  },
+                  tooltip: 'Check Interactions',
+                ),
+              ],
             ),
             SliverPadding(
               padding: const EdgeInsets.all(16.0),
@@ -44,10 +75,12 @@ class MedicationListScreen extends StatelessWidget {
   }
 
   Widget _buildNextDoseCard(BuildContext context) {
-    final nextDose = context.watch<AppState>().getNextDose();
-    if (nextDose == null) {
+    final medications = context.watch<AppState>().medications;
+    if (medications.isEmpty) {
       return const SizedBox.shrink();
     }
+
+    final nextMedication = medications.first; // For simplicity, showing first medication
     
     return Card(
       elevation: 4,
@@ -93,22 +126,24 @@ class MedicationListScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              nextDose['name'] as String,
+              nextMedication.name,
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
+              overflow: TextOverflow.ellipsis,
             ).animate()
               .fadeIn(delay: 200.ms)
               .slideX(begin: -0.2, end: 0),
             const SizedBox(height: 8),
             Text(
-              '${nextDose['dosage']} • ${nextDose['time']}',
+              '${nextMedication.dosage} • ${_formatTime(nextMedication.time)}',
               style: const TextStyle(
                 fontSize: 16,
                 color: Colors.white70,
               ),
+              overflow: TextOverflow.ellipsis,
             ).animate()
               .fadeIn(delay: 400.ms)
               .slideX(begin: -0.2, end: 0),
@@ -172,9 +207,7 @@ class MedicationListScreen extends StatelessWidget {
           .fadeIn()
           .slideX(begin: -0.2, end: 0),
         const SizedBox(height: 16),
-        ...medications.asMap().entries.map((entry) {
-          final index = entry.key;
-          final medication = entry.value;
+        ...medications.map((medication) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: GestureDetector(
@@ -193,7 +226,7 @@ class MedicationListScreen extends StatelessWidget {
                         FilledButton(
                           onPressed: () {
                             Navigator.of(context).pop();
-                            context.read<AppState>().removeMedication(index);
+                            context.read<AppState>().removeMedication(medication.name);
                           },
                           child: const Text('Delete'),
                         ),
@@ -210,7 +243,6 @@ class MedicationListScreen extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: medication['color'] as Color?,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
@@ -219,11 +251,14 @@ class MedicationListScreen extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            medication['name'] as String,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                          Expanded(
+                            child: Text(
+                              medication.name,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           IconButton(
@@ -232,7 +267,6 @@ class MedicationListScreen extends StatelessWidget {
                               showDialog(
                                 context: context,
                                 builder: (context) => EditMedicationDialog(
-                                  index: index,
                                   medication: medication,
                                 ),
                               );
@@ -241,30 +275,33 @@ class MedicationListScreen extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _buildInfoChip(
-                            Icons.medication,
-                            medication['dosage'] as String,
-                          ),
-                          const SizedBox(width: 8),
-                          _buildInfoChip(
-                            Icons.calendar_today,
-                            medication['frequency'] as String,
-                          ),
-                          const SizedBox(width: 8),
-                          _buildInfoChip(
-                            Icons.access_time,
-                            medication['time'] as String,
-                          ),
-                        ],
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildInfoChip(
+                              Icons.medication,
+                              medication.dosage,
+                            ),
+                            const SizedBox(width: 8),
+                            _buildInfoChip(
+                              Icons.calendar_today,
+                              medication.frequency,
+                            ),
+                            const SizedBox(width: 8),
+                            _buildInfoChip(
+                              Icons.access_time,
+                              _formatTime(medication.time),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
             ),
-          ).animate(delay: Duration(milliseconds: 100 * index))
+          ).animate()
             .fadeIn()
             .slideX(begin: 0.2, end: 0);
         }),
@@ -278,6 +315,7 @@ class MedicationListScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

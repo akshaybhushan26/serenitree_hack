@@ -1,90 +1,101 @@
 import 'package:flutter/material.dart';
-import 'package:serenitree_hack/services/storage_service.dart';
+import '../models/medication.dart';
+import '../models/mood_entry.dart';
+import '../services/storage_service.dart';
 
 class AppState extends ChangeNotifier {
-  // Theme colors
-  static const backgroundColor = Color(0xFFF5F5F5);
-  static const gradientEnd = Color(0xFFE0E0E0);
-
-  // Theme data
-  ThemeData get theme => ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF4CAF50),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-        scaffoldBackgroundColor: backgroundColor,
-      );
-
-  // Medications
-  final List<Map<String, dynamic>> _medications = [];
-  List<Map<String, dynamic>> get medications => _medications;
-  final StorageService _storageService = StorageService();
+  final StorageService _storage = StorageService();
+  List<Medication> _medications = [];
+  List<MoodEntry> _moodEntries = [];
+  final List<Map<String, dynamic>> _interactions = [];
+  int _meditationMinutes = 0;
+  int _completedExercises = 0;
 
   AppState() {
-    _initializeStorage();
+    _initializeState();
   }
 
-  Future<void> _initializeStorage() async {
-    await _storageService.initializeHive();
+  Future<void> _initializeState() async {
     await _loadMedications();
+    await _loadMoodEntries();
   }
 
   Future<void> _loadMedications() async {
-    final meds = await _storageService.getAllMedications();
-    _medications.addAll(meds);
-    notifyListeners();
-  }
-
-  Future<void> addMedication({required String name, required String dosage, required String frequency, required TimeOfDay time}) async {
-    final medication = {
-      'name': name,
-      'dosage': dosage,
-      'frequency': frequency,
-      'time': '${time.hourOfPeriod}:${time.minute.toString().padLeft(2, '0')} ${time.period == DayPeriod.am ? 'AM' : 'PM'}',
-    };
-    _medications.add(medication);
-    await _storageService.saveMedication(name, medication);
-    notifyListeners();
-  }
-
-  Future<void> removeMedication(int index) async {
-    final medication = _medications[index];
-    _medications.removeAt(index);
-    await _storageService.clearAllData(); // Since Hive doesn't support individual deletions easily
-    for (var med in _medications) {
-      await _storageService.saveMedication(med['name'], med);
+    try {
+      _medications = await _storage.getAllMedications();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading medications: $e');
     }
-    notifyListeners();
   }
 
-  Future<void> updateMedication(int index, Map<String, dynamic> medication) async {
-    _medications[index] = medication;
-    await _storageService.saveMedication(medication['name'], medication);
-    notifyListeners();
+  Future<void> _loadMoodEntries() async {
+    try {
+      _moodEntries = await _storage.getAllMoodEntries();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading mood entries: $e');
+    }
   }
 
-  // Therapy progress
-  int _completedExercises = 0;
-  int get completedExercises => _completedExercises;
+  // Medications
+  List<Medication> get medications => List.unmodifiable(_medications);
 
-  void incrementCompletedExercises() {
-    _completedExercises++;
-    notifyListeners();
+  Future<void> addMedication({
+    required String name,
+    required String dosage,
+    required String frequency,
+    required TimeOfDay time,
+  }) async {
+    final medication = Medication(
+      name: name,
+      dosage: dosage,
+      frequency: frequency,
+      time: time,
+    );
+    await _storage.saveMedication(medication);
+    await _loadMedications();
   }
 
-  // Meditation progress
-  int _meditationMinutes = 0;
-  int get meditationMinutes => _meditationMinutes;
-
-  void addMeditationMinutes(int minutes) {
-    _meditationMinutes += minutes;
-    notifyListeners();
+  Future<void> updateMedication(Medication medication) async {
+    await _storage.saveMedication(medication);
+    await _loadMedications();
   }
 
-  // Drug interactions
-  final List<Map<String, dynamic>> _interactions = [];
-  List<Map<String, dynamic>> get interactions => _interactions;
+  Future<void> removeMedication(String name) async {
+    await _storage.deleteMedication(name);
+    await _loadMedications();
+  }
+
+  TimeOfDay? getNextDose(String medicationName) {
+    try {
+      final medication = _medications.firstWhere(
+        (med) => med.name == medicationName,
+      );
+      return medication.time;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Mood Entries
+  List<MoodEntry> get moodEntries => List.unmodifiable(_moodEntries);
+
+  Future<void> addMoodEntry(MoodEntry entry) async {
+    await _storage.saveMoodEntry(entry);
+    await _loadMoodEntries();
+  }
+
+  List<MoodEntry> getMoodTrend([int days = 7]) {
+    final now = DateTime.now();
+    return _moodEntries
+        .where((entry) =>
+            entry.timestamp.isAfter(now.subtract(Duration(days: days))))
+        .toList();
+  }
+
+  // Interactions
+  List<Map<String, dynamic>> get interactions => List.unmodifiable(_interactions);
 
   void addInteraction(Map<String, dynamic> interaction) {
     _interactions.add(interaction);
@@ -96,50 +107,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Mood tracking
-  final List<Map<String, dynamic>> _moodEntries = [];
-  List<Map<String, dynamic>> get moodEntries => _moodEntries;
+  // Meditation
+  int get meditationMinutes => _meditationMinutes;
 
-  void addMoodEntry(Map<String, dynamic> entry) {
-    _moodEntries.add(entry);
+  void addMeditationMinutes(int minutes) {
+    _meditationMinutes += minutes;
     notifyListeners();
   }
 
-  // Get mood trend for the last 7 days
-  List<Map<String, dynamic>> getMoodTrend() {
-    final now = DateTime.now();
-    return _moodEntries
-        .where((entry) =>
-            now.difference(entry['timestamp'] as DateTime).inDays <= 7)
-        .toList();
-  }
+  // Therapy Exercises
+  int get completedExercises => _completedExercises;
 
-  // Get next medication dose
-  Map<String, dynamic>? getNextDose() {
-    if (_medications.isEmpty) return null;
-
-    final now = TimeOfDay.now();
-    return _medications.firstWhere(
-      (med) {
-        final doseTime = med['time'] as String;
-        final parts = doseTime.split(':');
-        final hour = int.parse(parts[0]);
-        final minute = int.parse(parts[1].split(' ')[0]);
-        final period = parts[1].split(' ')[1];
-        
-        final medTime = TimeOfDay(
-          hour: period == 'PM' && hour != 12
-              ? hour + 12
-              : period == 'AM' && hour == 12
-                  ? 0
-                  : hour,
-          minute: minute,
-        );
-
-        return medTime.hour > now.hour ||
-            (medTime.hour == now.hour && medTime.minute > now.minute);
-      },
-      orElse: () => _medications.first,
-    );
+  void incrementCompletedExercises() {
+    _completedExercises++;
+    notifyListeners();
   }
 }

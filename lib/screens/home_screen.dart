@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:provider/provider.dart';
-import '../providers/app_state.dart';
 import 'chatbot_screen.dart';
 import 'interaction_checker_screen.dart';
 import 'package:serenitree_hack/screens/scan_screen.dart';
 import '../main.dart';
+import '../widgets/mood_tracker_widget.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -17,7 +16,7 @@ class HomeScreen extends StatelessWidget {
         child: CustomScrollView(
           slivers: [
             const SliverAppBar(  // Changed from SliverAppBar.large to SliverAppBar
-              // title: Text('SereniTree'),
+              title: Text('SereniTree'),
               centerTitle: false,
               floating: true,
             ),
@@ -26,6 +25,8 @@ class HomeScreen extends StatelessWidget {
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   _buildWelcomeCard(context),
+                  const SizedBox(height: 16),
+                  const MoodTrackerWidget(),
                   const SizedBox(height: 16),
                   _buildFeatureGrid(context),
                 ]),
@@ -101,7 +102,7 @@ class HomeScreen extends StatelessWidget {
               pageBuilder: (context, animation, secondaryAnimation) {
                 return FadeTransition(
                   opacity: animation,
-                  child: MainScreen(initialIndex: 1),
+                  child: const MainScreen(initialIndex: 1),
                 );
               },
             ),
@@ -118,7 +119,7 @@ class HomeScreen extends StatelessWidget {
             pageBuilder: (context, animation, secondaryAnimation) {
               return FadeTransition(
                 opacity: animation,
-                child: MainScreen(initialIndex: 2),
+                child: const MainScreen(initialIndex: 2),
               );
             },
           ),
@@ -134,7 +135,7 @@ class HomeScreen extends StatelessWidget {
             pageBuilder: (context, animation, secondaryAnimation) {
               return FadeTransition(
                 opacity: animation,
-                child: MainScreen(initialIndex: 3),
+                child: const MainScreen(initialIndex: 3),
               );
             },
           ),

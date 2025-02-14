@@ -15,7 +15,7 @@ class InteractionCheckerScreen extends StatefulWidget {
 class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
   final _searchController = TextEditingController();
   List<Map<String, dynamic>> _searchResults = [];
-  List<Map<String, dynamic>> _selectedMedications = [];
+  final List<Map<String, dynamic>> _selectedMedications = [];
   bool _isLoading = false;
   final _drugInteractionService = DrugInteractionService();
 
@@ -167,7 +167,7 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
       itemBuilder: (context, index) {
         final drug = _searchResults[index];
         return ListTile(
-          title: Text(drug['name']),
+          title: Text(drug['name'] as String),
           trailing: IconButton(
             icon: const Icon(Icons.add),
             onPressed: () {
@@ -261,7 +261,7 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
       itemCount: interactions.length,
       itemBuilder: (context, index) {
         final interaction = interactions[index];
-        final severity = interaction['severity'];
+        final severity = interaction['severity'] as String;
         final color = _drugInteractionService.getSeverityColor(severity);
 
         return Card(
@@ -301,7 +301,7 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  interaction['description'],
+                  interaction['description'] as String,
                   style: TextStyle(color: Colors.grey[700]),
                 ),
               ],
@@ -392,7 +392,7 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
                             ),
                             filled: true,
                             fillColor:
-                                Theme.of(context).colorScheme.surfaceVariant,
+                                Theme.of(context).colorScheme.surfaceContainerHighest,
                           ),
                           onSubmitted: (_) => _performSearch(),
                         ).animate().fadeIn().slideY(begin: 0.2, end: 0),
@@ -429,7 +429,7 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
                   if (interactions.isNotEmpty ||
                       _selectedMedications.length >= 2) ...[
                     Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16.0),
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
                       child: Row(
                         children: [
                           const Text(
@@ -449,9 +449,9 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
                                 color: Colors.red.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Row(
+                              child: const Row(
                                 mainAxisSize: MainAxisSize.min,
-                                children: const [
+                                children: [
                                   Icon(Icons.warning_amber_rounded,
                                       color: Colors.red, size: 16),
                                   SizedBox(width: 4),
@@ -474,9 +474,9 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
                                 color: Colors.green.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Row(
+                              child: const Row(
                                 mainAxisSize: MainAxisSize.min,
-                                children: const [
+                                children: [
                                   Icon(Icons.check_circle_outline,
                                       color: Colors.green, size: 16),
                                   SizedBox(width: 4),

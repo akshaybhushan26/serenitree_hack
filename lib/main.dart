@@ -5,16 +5,19 @@ import 'screens/home_screen.dart';
 import 'screens/medication_list_screen.dart';
 import 'screens/therapy_screen.dart';
 import 'screens/meditation_screen.dart';
-import 'screens/scan_screen.dart';
-import 'screens/interaction_checker_screen.dart';
 import 'providers/app_state.dart';
 import 'services/storage_service.dart';
+import 'services/audio_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Initialize services
   final storageService = StorageService();
   await storageService.initializeHive();
+  
+  final audioService = AudioService();
+  await audioService.initialize();
   
   runApp(
     ChangeNotifierProvider(
@@ -24,8 +27,33 @@ void main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    AudioService().disposeAll();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      AudioService().disposeAll();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

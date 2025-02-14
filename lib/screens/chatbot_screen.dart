@@ -33,13 +33,21 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   }
 
   Future<void> _loadChatHistory() async {
-    final history = await _storageService.getChatHistory();
-    setState(() {
-      _messages.addAll(history);
-    });
+    try {
+      final history = await _storageService.getChatHistory();
+      if (history != null) {
+        setState(() {
+          _messages.addAll(history);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading chat history: $e');
+    }
   }
 
   void _addBotMessage(String message) {
+    if (message.isEmpty) return;
+    
     final botMessage = {
       'isUser': false,
       'message': message,
@@ -48,10 +56,14 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     setState(() {
       _messages.add(botMessage);
     });
-    _storageService.saveChatMessage(botMessage);
+    _storageService.saveChatMessage(botMessage).catchError((e) {
+      debugPrint('Error saving bot message: $e');
+    });
   }
 
   void _addUserMessage(String message) {
+    if (message.isEmpty) return;
+
     final userMessage = {
       'isUser': true,
       'message': message,
@@ -60,7 +72,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     setState(() {
       _messages.add(userMessage);
     });
-    _storageService.saveChatMessage(userMessage);
+    _storageService.saveChatMessage(userMessage).catchError((e) {
+      debugPrint('Error saving user message: $e');
+    });
   }
 
   @override
@@ -79,13 +93,11 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     try {
       final medications = await _aiService.analyzePrescription(message);
       if (medications.isNotEmpty) {
-        final response = 'I found information about the following medications:\n\n' +
-            medications.map((med) => 
-              '${med["name"]}:\n' +
-              '- Dosage: ${med["dosage"]}\n' +
+        final response = 'I found information about the following medications:\n\n${medications.map((med) => 
+              '${med["name"]}:\n' '- Dosage: ${med["dosage"]}\n' +
               '- Frequency: ${med["frequency"]}\n' +
               (med["time"]?.isNotEmpty == true ? '- Time: ${med["time"]}\n' : '')
-            ).join('\n');
+            ).join('\n')}';
         _addBotMessage(response);
       } else {
         final response = await _aiService.chat(message);
@@ -185,7 +197,7 @@ class _MessageBubble extends StatelessWidget {
         decoration: BoxDecoration(
           color: isUser
               ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.surfaceVariant,
+              : Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(

@@ -9,26 +9,32 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  google_mlkit_commons: ^0.9.0
+  google_mlkit_text_recognition: ^0.14.0
+  camera: ^0.10.6
+  fl_chart: ^0.64.0
   cupertino_icons: ^1.0.2
   provider: ^6.1.1
-  flutter_animate: ^4.3.0
-  animations: ^2.0.8
-  http: ^1.1.2
-  shared_preferences: ^2.2.2
-  intl: ^0.19.0
-  google_mlkit_text_recognition: ^0.11.0
-  camera: ^0.10.5+5
-  path_provider: ^2.1.1
-  path: ^1.8.3
-  xml: ^6.3.0
-  image_picker: ^1.1.2
   hive: ^2.2.3
   hive_flutter: ^1.1.0
+  image_picker: ^1.0.7
+  permission_handler: ^11.1.0
+  flutter_animate: ^4.3.0
+  just_audio: ^0.9.36
+  audio_session: ^0.1.18
+  animations: ^2.0.11
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+  build_runner: ^2.4.6
+  json_serializable: ^6.7.1
+  hive_generator: ^2.0.1
 
 flutter:
   uses-material-design: true
+  
+  assets:
+    - assets/audio/

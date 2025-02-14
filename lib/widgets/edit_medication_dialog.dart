@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
+import '../models/medication.dart';
 
 class EditMedicationDialog extends StatefulWidget {
-  final int index;
-  final Map<String, dynamic> medication;
+  final Medication medication;
 
   const EditMedicationDialog({
     super.key,
-    required this.index,
     required this.medication,
   });
 
@@ -26,25 +25,10 @@ class _EditMedicationDialogState extends State<EditMedicationDialog> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.medication['name'] as String);
-    _dosageController = TextEditingController(text: widget.medication['dosage'] as String);
-    _frequency = widget.medication['frequency'] as String;
-
-    final timeStr = widget.medication['time'] as String;
-    final parts = timeStr.split(':');
-    final hour = int.parse(parts[0]);
-    final minuteParts = parts[1].split(' ');
-    final minute = int.parse(minuteParts[0]);
-    final period = minuteParts[1];
-    
-    _time = TimeOfDay(
-      hour: period == 'PM' && hour != 12
-          ? hour + 12
-          : period == 'AM' && hour == 12
-              ? 0
-              : hour,
-      minute: minute,
-    );
+    _nameController = TextEditingController(text: widget.medication.name);
+    _dosageController = TextEditingController(text: widget.medication.dosage);
+    _frequency = widget.medication.frequency;
+    _time = widget.medication.time;
   }
 
   @override
@@ -75,16 +59,14 @@ class _EditMedicationDialogState extends State<EditMedicationDialog> {
 
   void _submit() {
     if (_formKey.currentState?.validate() ?? false) {
-      final medication = {
-        'name': _nameController.text,
-        'dosage': _dosageController.text,
-        'frequency': _frequency,
-        'time': _formatTime(_time),
-        'color': widget.medication['color'],
-        'added': widget.medication['added'], // Preserve the original timestamp
-      };
+      final medicationData = Medication(
+        name: _nameController.text,
+        dosage: _dosageController.text,
+        frequency: _frequency,
+        time: _time,
+      );
 
-      context.read<AppState>().updateMedication(widget.index, medication);
+      context.read<AppState>().updateMedication(medicationData);
       Navigator.pop(context);
     }
   }

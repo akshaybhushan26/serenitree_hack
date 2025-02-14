@@ -1,42 +1,37 @@
-class MoodEntry {
-  final int mood;
-  final String note;
+import 'package:hive/hive.dart';
+
+part 'mood_entry.g.dart';
+
+@HiveType(typeId: 1)
+class MoodEntry extends HiveObject {
+  @HiveField(0)
   final DateTime timestamp;
 
+  @HiveField(1)
+  final int moodLevel;
+
+  @HiveField(2)
+  final String? note;
+
   MoodEntry({
-    required this.mood,
-    required this.note,
     required this.timestamp,
+    required this.moodLevel,
+    this.note,
   });
 
-  String get moodEmoji {
-    switch (mood) {
-      case 1: return '😢';
-      case 2: return '😕';
-      case 3: return '😐';
-      case 4: return '🙂';
-      case 5: return '😄';
-      default: return '😐';
-    }
-  }
-
-  String get formattedDate {
-    return '${timestamp.day}/${timestamp.month}/${timestamp.year} ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}';
-  }
-
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toMap() {
     return {
-      'mood': mood,
+      'timestamp': timestamp,
+      'moodLevel': moodLevel,
       'note': note,
-      'timestamp': timestamp.toIso8601String(),
     };
   }
 
-  factory MoodEntry.fromJson(Map<String, dynamic> json) {
+  factory MoodEntry.fromMap(Map<String, dynamic> map) {
     return MoodEntry(
-      mood: json['mood'] as int,
-      note: json['note'] as String,
-      timestamp: DateTime.parse(json['timestamp'] as String),
+      timestamp: map['timestamp'] as DateTime,
+      moodLevel: map['moodLevel'] as int,
+      note: map['note'] as String?,
     );
   }
 }
