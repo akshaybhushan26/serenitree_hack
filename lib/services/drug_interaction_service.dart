@@ -7,6 +7,11 @@ class DrugInteractionService {
   final _rateLimiter = <String, DateTime>{};
   final _cacheDuration = const Duration(minutes: 5);
   final _cache = <String, dynamic>{};
+  final _minRequestInterval = const Duration(milliseconds: 200);
+
+  bool _isValidDrugName(String name) {
+    return name.isNotEmpty && RegExp(r'^[a-zA-Z0-9\- ]+$').hasMatch(name);
+  }
 
   String _extractFirstValue(dynamic field) {
     if (field is List && field.isNotEmpty) {
@@ -24,19 +29,15 @@ class DrugInteractionService {
   }
 
   String _cleanInteractionText(String text) {
-    // Remove HTML tags if present
     var cleaned = text.replaceAll(RegExp(r'<[^>]*>'), '');
-
-    // Remove multiple spaces and newlines
     cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ');
 
-    // Trim to reasonable length while keeping complete sentences
     if (cleaned.length > 300) {
       final sentences = cleaned.split(RegExp(r'(?<=[.!?])\s+'));
       cleaned = '';
       for (var sentence in sentences) {
         if ((cleaned + sentence).length > 300) break;
-        cleaned += sentence + ' ';
+        cleaned += '$sentence ';
       }
       cleaned = cleaned.trim();
     }
@@ -47,28 +48,46 @@ class DrugInteractionService {
   String _determineSeverity(String text) {
     final lowercaseText = text.toLowerCase();
 
-    // Check for severe interaction indicators
     if (lowercaseText.contains('severe') ||
         lowercaseText.contains('dangerous') ||
         lowercaseText.contains('fatal') ||
         lowercaseText.contains('life-threatening') ||
         lowercaseText.contains('contraindicated') ||
         lowercaseText.contains('avoid') ||
-        lowercaseText.contains('serious')) {
+        lowercaseText.contains('serious') ||
+        lowercaseText.contains('warning') ||
+        lowercaseText.contains('stop') ||
+        lowercaseText.contains('emergency')) {
       return 'high';
     }
 
-    // Check for moderate interaction indicators
     if (lowercaseText.contains('moderate') ||
         lowercaseText.contains('significant') ||
         lowercaseText.contains('monitor') ||
         lowercaseText.contains('adjust') ||
         lowercaseText.contains('may increase') ||
-        lowercaseText.contains('may decrease')) {
+        lowercaseText.contains('may decrease') ||
+        lowercaseText.contains('caution') ||
+        lowercaseText.contains('consider') ||
+        lowercaseText.contains('potential') ||
+        lowercaseText.contains('possible')) {
       return 'medium';
     }
 
-    // Default to low severity
+    if (lowercaseText.contains('mild') ||
+        lowercaseText.contains('minor') ||
+        lowercaseText.contains('minimal') ||
+        lowercaseText.contains('slight') ||
+        lowercaseText.contains('rarely')) {
+      return 'low';
+    }
+
+    if (lowercaseText.contains('interaction') ||
+        lowercaseText.contains('effect') ||
+        lowercaseText.contains('level')) {
+      return 'medium';
+    }
+
     return 'low';
   }
 
@@ -86,14 +105,16 @@ class DrugInteractionService {
   }
 
   Future<void> _throttleRequest(String key) async {
+    final now = DateTime.now();
     final lastRequest = _rateLimiter[key];
+    
     if (lastRequest != null) {
-      final timeSinceLastRequest = DateTime.now().difference(lastRequest);
-      if (timeSinceLastRequest < const Duration(milliseconds: 100)) {
-        await Future.delayed(
-            const Duration(milliseconds: 100) - timeSinceLastRequest);
+      final timeSinceLastRequest = now.difference(lastRequest);
+      if (timeSinceLastRequest < _minRequestInterval) {
+        await Future.delayed(_minRequestInterval - timeSinceLastRequest);
       }
     }
+    
     _rateLimiter[key] = DateTime.now();
   }
 
@@ -117,218 +138,245 @@ class DrugInteractionService {
   }
 
   Future<List<String>> searchDrugs(String query) async {
-  if (query.isEmpty || query.length < 3) return [];
-  
-  await _throttleRequest('search');
-  final cacheKey = 'search_$query';
-  final cachedResults = _getCachedData(cacheKey);
-  
-  if (cachedResults != null) {
-    return List<String>.from(cachedResults);
-  }
+    if (query.isEmpty) {
+      throw Exception('Please enter a drug name to search');
+    }
 
-  try {
-    // Create a more lenient search query
-    final searchQuery = Uri.encodeComponent(
-      'openfda.brand_name:"${query.trim()}"+' +
-      'openfda.brand_name:"${query.trim()}*"+' +
-      'openfda.generic_name:"${query.trim()}"+' +
-      'openfda.generic_name:"${query.trim()}*"'
-    );
+    if (query.length < 3) {
+      throw Exception('Please enter at least 3 characters to search');
+    }
 
-    final url = Uri.parse('$_baseUrl/label.json?search=$searchQuery&limit=100');
-    print('Search URL: $url'); // Debug print
+    await _throttleRequest('search');
+    final cacheKey = 'search_$query';
+    final cachedResults = _getCachedData(cacheKey);
 
-    final response = await http.get(url);
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      if (!data.containsKey('results')) {
-        throw Exception('Invalid API response format');
+    if (cachedResults != null) {
+      if (cachedResults.isEmpty) {
+        throw Exception('No medications found matching "$query"');
       }
+      return List<String>.from(cachedResults);
+    }
 
-      final results = data['results'] as List<dynamic>;
-      final uniqueDrugs = <String>{};
+    try {
+      final searchQuery = Uri.encodeComponent(
+        'openfda.brand_name:"${query.trim()}" OR ' +
+        'openfda.brand_name:"${query.trim()}*" OR ' +
+        'openfda.generic_name:"${query.trim()}" OR ' +
+        'openfda.generic_name:"${query.trim()}*"'
+      );
 
-      for (final result in results) {
-        if (result is Map<String, dynamic> && 
-            result['openfda'] is Map<String, dynamic>) {
-          final openfda = result['openfda'] as Map<String, dynamic>;
-          
-          // Process brand names
-          if (openfda['brand_name'] is List) {
-            for (final name in openfda['brand_name']) {
-              if (name is String) {
-                uniqueDrugs.add(name);
+      final url = Uri.parse('$_baseUrl/label.json?search=$searchQuery&limit=100');
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (!data.containsKey('results')) {
+          throw Exception('Invalid API response format');
+        }
+
+        final results = data['results'] as List<dynamic>;
+        final uniqueDrugs = <String>{};
+
+        for (final result in results) {
+          if (result is Map<String, dynamic> && 
+              result['openfda'] is Map<String, dynamic>) {
+            final openfda = result['openfda'] as Map<String, dynamic>;
+            
+            if (openfda['brand_name'] is List) {
+              for (final name in openfda['brand_name']) {
+                if (name is String) {
+                  uniqueDrugs.add(name);
+                }
               }
             }
-          }
-          
-          // Process generic names
-          if (openfda['generic_name'] is List) {
-            for (final name in openfda['generic_name']) {
-              if (name is String) {
-                uniqueDrugs.add(name);
+            
+            if (openfda['generic_name'] is List) {
+              for (final name in openfda['generic_name']) {
+                if (name is String) {
+                  uniqueDrugs.add(name);
+                }
               }
             }
           }
         }
-      }
 
-      // Filter results based on query
-      final filteredDrugs = uniqueDrugs
-          .where((drug) => drug.toLowerCase().contains(query.toLowerCase()))
-          .toList()
-        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        final filteredDrugs = uniqueDrugs
+            .where((drug) => drug.toLowerCase().contains(query.toLowerCase()))
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
-      _cacheData(cacheKey, filteredDrugs);
-      
-      print('Found ${filteredDrugs.length} results'); // Debug print
-      return filteredDrugs;
+        _cacheData(cacheKey, filteredDrugs);
+        
+        if (filteredDrugs.isEmpty) {
+          throw Exception('No medications found matching "$query"');
+        }
+        return filteredDrugs;
 
-    } else {
-      print('API Error: ${response.statusCode}'); // Debug print
-      print('Response body: ${response.body}'); // Debug print
-      if (response.statusCode == 404) {
+      } else if (response.statusCode == 429) {
+        throw Exception('Too many requests. Please try again in a few moments.');
+      } else if (response.statusCode == 404) {
         return [];
+      } else {
+        throw Exception('Failed to search drugs (Status ${response.statusCode}). Please try again.');
       }
-      throw Exception('Failed to search drugs: ${response.statusCode}');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('An unexpected error occurred while searching. Please try again.');
     }
-  } catch (e) {
-    print('Error searching drugs: $e');
-    return [];
   }
-}
-  Future<List<Map<String, dynamic>>> checkInteractions(
-      List<String> drugs) async {
+
+  Future<List<Map<String, dynamic>>> checkInteractions(List<String> drugs) async {
+    if (drugs.isEmpty) {
+      return [];
+    }
+
+    for (final drug in drugs) {
+      if (!_isValidDrugName(drug)) {
+        throw Exception('Invalid drug name format: "$drug". Drug names should only contain letters, numbers, spaces, and hyphens.');
+      }
+    }
+
     final interactions = <Map<String, dynamic>>[];
+    final processedPairs = <String>{};
 
     try {
       for (var i = 0; i < drugs.length; i++) {
         for (var j = i + 1; j < drugs.length; j++) {
           final drug1 = drugs[i];
           final drug2 = drugs[j];
+          final drugNames = [drug1.toLowerCase(), drug2.toLowerCase()];
+          drugNames.sort();
+          final pairKey = drugNames.join('_');
+          
+          if (processedPairs.contains(pairKey)) continue;
+          processedPairs.add(pairKey);
 
           await _throttleRequest('interaction');
 
-          final cacheKey = 'interaction_${drug1}_${drug2}';
+          final cacheKey = 'interaction_$pairKey';
           final cachedInteraction = _getCachedData(cacheKey);
           if (cachedInteraction != null) {
             if (cachedInteraction is List) {
-              interactions
-                  .addAll(List<Map<String, dynamic>>.from(cachedInteraction));
+              interactions.addAll(List<Map<String, dynamic>>.from(cachedInteraction));
             }
             continue;
           }
 
-          final response1 = await http.get(
-            Uri.parse('$_baseUrl/label.json').replace(
-              queryParameters: {
-                'search':
-                    '(openfda.brand_name:"$drug1" OR openfda.generic_name:"$drug1" OR openfda.brand_name:"$drug1"~2 OR openfda.generic_name:"$drug1"~2) AND _exists_:drug_interactions AND _exists_:openfda',
-                'limit': '1',
-              },
-            ),
-          );
+          final pairInteractions = await _checkDrugPairInteractions(drug1, drug2);
+          if (pairInteractions.isNotEmpty) {
+            interactions.addAll(pairInteractions);
+            _cacheData(cacheKey, pairInteractions);
+          }
+        }
+      }
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('An unexpected error occurred while checking interactions. Please try again.');
+    }
 
-          if (response1.statusCode == 200) {
-            final data1 = json.decode(response1.body);
-            if (!data1.containsKey('results')) {
-              throw Exception('Invalid API response format');
-            }
+    return interactions;
+  }
 
-            final results = data1['results'] as List<dynamic>;
-            if (results.isNotEmpty && results[0] is Map<String, dynamic>) {
-              final result = results[0] as Map<String, dynamic>;
-              if (result['drug_interactions'] is List &&
-                  result['drug_interactions'].isNotEmpty) {
-                final interactionText =
-                    result['drug_interactions'][0] as String;
-                final drug2Variations = [
-                  drug2.toLowerCase(),
-                  drug2.toLowerCase().replaceAll(' ', ''),
-                  drug2.toLowerCase().replaceAll('-', ' '),
-                  drug2.toLowerCase().replaceAll('-', ''),
-                ];
+  Future<List<Map<String, dynamic>>> _checkDrugPairInteractions(String drug1, String drug2) async {
+    final interactions = <Map<String, dynamic>>[];
 
-                if (drug2Variations.any((variation) =>
-                    interactionText.toLowerCase().contains(variation))) {
-                  final cleanText = _cleanInteractionText(interactionText);
-                  if (cleanText.isNotEmpty) {
-                    interactions.add({
-                      'drug1': drug1,
-                      'drug2': drug2,
-                      'description': cleanText,
-                      'severity': _determineSeverity(interactionText),
-                    });
-                    continue;
-                  }
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/label.json').replace(
+          queryParameters: {
+            'search': '(openfda.brand_name:"$drug1" OR openfda.generic_name:"$drug1") AND _exists_:drug_interactions AND _exists_:openfda',
+            'limit': '1',
+          },
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['results'] != null && data['results'].isNotEmpty) {
+          final result = data['results'][0];
+          if (result['drug_interactions'] != null) {
+            final interactionTexts = result['drug_interactions'] as List<dynamic>;
+            for (final text in interactionTexts) {
+              if (_containsDrug(text.toString(), drug2)) {
+                final cleanText = _cleanInteractionText(text.toString());
+                if (cleanText.isNotEmpty) {
+                  interactions.add({
+                    'drug1': drug1,
+                    'drug2': drug2,
+                    'description': cleanText,
+                    'severity': _determineSeverity(text.toString()),
+                  });
+                  break;
                 }
               }
             }
-          } else if (response1.statusCode != 404) {
-            throw Exception(
-                'Failed to check interactions: ${response1.statusCode}');
           }
+        }
+      } else if (response.statusCode == 429) {
+        throw Exception('Too many requests. Please try again in a few moments.');
+      } else if (response.statusCode == 400) {
+        throw Exception('Invalid request format. Please check drug names and try again.');
+      } else if (response.statusCode != 404) {
+        throw Exception('Failed to check interactions (Status ${response.statusCode}). Please try again.');
+      }
 
-          await _throttleRequest('interaction');
+      if (interactions.isEmpty) {
+        final reverseResponse = await http.get(
+          Uri.parse('$_baseUrl/label.json').replace(
+            queryParameters: {
+              'search': '(openfda.brand_name:"$drug2" OR openfda.generic_name:"$drug2") AND _exists_:drug_interactions AND _exists_:openfda',
+              'limit': '1',
+            },
+          ),
+        );
 
-          final response2 = await http.get(
-            Uri.parse('$_baseUrl/label.json').replace(
-              queryParameters: {
-                'search':
-                    '(openfda.brand_name:"$drug2" OR openfda.generic_name:"$drug2" OR openfda.brand_name:"$drug2"~2 OR openfda.generic_name:"$drug2"~2) AND _exists_:drug_interactions AND _exists_:openfda',
-                'limit': '1',
-              },
-            ),
-          );
-
-          if (response2.statusCode == 200) {
-            final data2 = json.decode(response2.body);
-            if (!data2.containsKey('results')) {
-              throw Exception('Invalid API response format');
-            }
-
-            final results = data2['results'] as List<dynamic>;
-            if (results.isNotEmpty && results[0] is Map<String, dynamic>) {
-              final result = results[0] as Map<String, dynamic>;
-              if (result['drug_interactions'] is List &&
-                  result['drug_interactions'].isNotEmpty) {
-                final interactionText =
-                    result['drug_interactions'][0] as String;
-                final drug1Variations = [
-                  drug1.toLowerCase(),
-                  drug1.toLowerCase().replaceAll(' ', ''),
-                  drug1.toLowerCase().replaceAll('-', ' '),
-                  drug1.toLowerCase().replaceAll('-', ''),
-                ];
-
-                if (drug1Variations.any((variation) =>
-                    interactionText.toLowerCase().contains(variation))) {
-                  final cleanText = _cleanInteractionText(interactionText);
+        if (reverseResponse.statusCode == 200) {
+          final data = json.decode(reverseResponse.body);
+          if (data['results'] != null && data['results'].isNotEmpty) {
+            final result = data['results'][0];
+            if (result['drug_interactions'] != null) {
+              final interactionTexts = result['drug_interactions'] as List<dynamic>;
+              for (final text in interactionTexts) {
+                if (_containsDrug(text.toString(), drug1)) {
+                  final cleanText = _cleanInteractionText(text.toString());
                   if (cleanText.isNotEmpty) {
                     interactions.add({
                       'drug1': drug2,
                       'drug2': drug1,
                       'description': cleanText,
-                      'severity': _determineSeverity(interactionText),
+                      'severity': _determineSeverity(text.toString()),
                     });
+                    break;
                   }
                 }
               }
             }
-          } else if (response2.statusCode != 404) {
-            throw Exception(
-                'Failed to check interactions: ${response2.statusCode}');
           }
+        } else if (reverseResponse.statusCode == 429) {
+          throw Exception('Too many requests. Please try again in a few moments.');
+        } else if (reverseResponse.statusCode == 400) {
+          throw Exception('Invalid request format. Please check drug names and try again.');
+        } else if (reverseResponse.statusCode != 404) {
+          throw Exception('Failed to check interactions (Status ${reverseResponse.statusCode}). Please try again.');
         }
       }
     } catch (e) {
-      print('Error checking interactions: $e');
-      throw e;
+      if (e is Exception) rethrow;
+      throw Exception('An unexpected error occurred while checking drug interactions. Please try again.');
     }
 
     return interactions;
+  }
+
+  bool _containsDrug(String text, String drugName) {
+    final variations = [
+      drugName.toLowerCase(),
+      drugName.toLowerCase().replaceAll(' ', ''),
+      drugName.toLowerCase().replaceAll('-', ' '),
+      drugName.toLowerCase().replaceAll('-', ''),
+    ];
+    
+    return variations.any((variation) => text.toLowerCase().contains(variation));
   }
 
   Future<Map<String, dynamic>> getDrugInfo(String drug) async {
@@ -371,8 +419,7 @@ class DrugInteractionService {
           } else {
             info['brand_name'] = _extractFirstValue(result['brand_name']);
             info['generic_name'] = _extractFirstValue(result['generic_name']);
-            info['route'] =
-                _extractFirstValue(result['dosage_and_administration']);
+            info['route'] = _extractFirstValue(result['dosage_and_administration']);
           }
 
           info['warnings'] =
@@ -380,19 +427,22 @@ class DrugInteractionService {
                   ? _extractAndTruncateText(result['boxed_warnings'])
                   : _extractAndTruncateText(result['warnings']);
 
-          info['side_effects'] =
-              _extractAndTruncateText(result['adverse_reactions']);
+          info['side_effects'] = _extractAndTruncateText(result['adverse_reactions']);
 
           _cacheData(cacheKey, Map<String, dynamic>.from(info));
           return info;
         }
+      } else if (response.statusCode == 429) {
+        throw Exception('Too many requests. Please try again in a few moments.');
+      } else if (response.statusCode == 400) {
+        throw Exception('Invalid request format. Please check drug name and try again.');
       } else if (response.statusCode != 404) {
-        throw Exception('Failed to get drug info: ${response.statusCode}');
+        throw Exception('Failed to get drug info (Status ${response.statusCode}). Please try again.');
       }
       return {};
     } catch (e) {
-      print('Error getting drug info: $e');
-      return {};
+      if (e is Exception) rethrow;
+      throw Exception('An unexpected error occurred while getting drug information. Please try again.');
     }
   }
 }

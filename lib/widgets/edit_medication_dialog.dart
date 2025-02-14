@@ -81,6 +81,7 @@ class _EditMedicationDialogState extends State<EditMedicationDialog> {
         'frequency': _frequency,
         'time': _formatTime(_time),
         'color': widget.medication['color'],
+        'added': widget.medication['added'], // Preserve the original timestamp
       };
 
       context.read<AppState>().updateMedication(widget.index, medication);

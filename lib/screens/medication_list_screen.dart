@@ -94,7 +94,7 @@ class MedicationListScreen extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               nextDose['name'] as String,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -105,7 +105,7 @@ class MedicationListScreen extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               '${nextDose['dosage']} • ${nextDose['time']}',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 16,
                 color: Colors.white70,
               ),

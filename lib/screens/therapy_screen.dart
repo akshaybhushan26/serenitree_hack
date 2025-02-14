@@ -206,7 +206,7 @@ class TherapyScreen extends StatelessWidget {
                       const SizedBox(width: 8),
                       Chip(
                         label: Text(exercise['duration'] as String),
-                        backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       ),
                     ],
                   ),

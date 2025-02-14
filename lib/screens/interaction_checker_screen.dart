@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../services/drug_interaction_service.dart';
@@ -8,105 +7,41 @@ class InteractionCheckerScreen extends StatefulWidget {
   const InteractionCheckerScreen({super.key});
 
   @override
-  State<InteractionCheckerScreen> createState() =>
-      _InteractionCheckerScreenState();
+  State<InteractionCheckerScreen> createState() => _InteractionCheckerScreenState();
 }
 
 class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
-  Widget _buildSeverityInfo(String level, String description, String color) {
-    return Row(
-      children: [
-        Container(
-          width: 16,
-          height: 16,
-          decoration: BoxDecoration(
-            color: Color(int.parse(color.substring(1), radix: 16) + 0xFF000000),
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                level,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                description,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   final _searchController = TextEditingController();
-  final _drugInteractionService = DrugInteractionService();
-  List<String> _searchResults = [];
+  List<Map<String, dynamic>> _searchResults = [];
   bool _isLoading = false;
+  final _drugInteractionService = DrugInteractionService();
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _searchDrugs(String query) async {
-    if (query.isEmpty) {
+  Future<void> _performSearch() async {
+    if (_searchController.text.trim().isEmpty) {
       setState(() {
         _searchResults = [];
       });
-      return;
-    }
-
-    if (query.length < 3) {
-      setState(() {
-        _searchResults = [];
-      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a medication name'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       return;
     }
 
     setState(() {
       _isLoading = true;
+      _searchResults = [];
     });
 
     try {
-      final results = await _drugInteractionService.searchDrugs(query);
-
-      if (!mounted) return;
-
+      final results = await _drugInteractionService.searchDrugs(_searchController.text.trim());
       setState(() {
-        _searchResults = results;
-        _isLoading = false;
+        _searchResults = results.map((drug) => {'name': drug}).toList();
       });
-
-      // Only show "no results" message if the query is long enough
-      if (results.isEmpty && query.length >= 3) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No medications found matching "$query"'),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
     } catch (e) {
       if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-        _searchResults = [];
-      });
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error searching medications: ${e.toString()}'),
@@ -114,7 +49,131 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildSearchResults() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (_searchResults.isEmpty) {
+      return Center(
+        child: Text(
+          _searchController.text.length < 3 ? 'Enter at least 3 characters to search' : 'No medications found',
+          style: TextStyle(color: Colors.grey[600]),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const ClampingScrollPhysics(),
+      itemCount: _searchResults.length,
+      itemBuilder: (context, index) {
+        final drug = _searchResults[index];
+        return ListTile(
+          title: Text(drug['name']),
+          trailing: IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () {
+              final appState = context.read<AppState>();
+              appState.addMedication({
+                'name': drug['name'],
+                'color': Theme.of(context).colorScheme.primaryContainer,
+                'time': '9:00 AM', // Default time
+                'added': DateTime.now(),
+              });
+              setState(() {
+                _searchResults = [];
+                _searchController.clear();
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${drug["name"]} added to check for drug interactions'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildInteractionResults(List<Map<String, dynamic>> interactions) {
+    if (interactions.isEmpty) {
+      return const Center(
+        child: Text('No interactions found between selected medications'),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const ClampingScrollPhysics(),
+      itemCount: interactions.length,
+      itemBuilder: (context, index) {
+        final interaction = interactions[index];
+        final severity = interaction['severity'];
+        final color = _drugInteractionService.getSeverityColor(severity);
+
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${interaction['drug1']} + ${interaction['drug2']}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Color(int.parse(color.substring(1), radix: 16)).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        severity.toUpperCase(),
+                        style: TextStyle(
+                          color: Color(int.parse(color.substring(1), radix: 16)),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  interaction['description'],
+                  style: TextStyle(color: Colors.grey[700]),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _checkInteractions() async {
@@ -122,8 +181,9 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
     if (medications.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Add medications to check for interactions'),
+          content: Text('Please add medications to check for interactions'),
           behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.orange,
         ),
       );
       return;
@@ -134,6 +194,7 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
         const SnackBar(
           content: Text('Add at least 2 medications to check for interactions'),
           behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.orange,
         ),
       );
       return;
@@ -145,17 +206,18 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
 
     try {
       final drugNames = medications.map((m) => m['name'] as String).toList();
-      final interactions =
-          await _drugInteractionService.checkInteractions(drugNames);
+      final interactions = await _drugInteractionService.checkInteractions(drugNames);
 
       if (!mounted) return;
 
       context.read<AppState>().clearInteractions();
+      
       if (interactions.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No interactions found between your medications'),
+            content: Text('No interactions found between your medications - it appears safe to take them together'),
             behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green,
           ),
         );
       } else {
@@ -164,8 +226,7 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text('Found ${interactions.length} potential interaction(s)'),
+            content: Text('Found ${interactions.length} potential interaction(s). Please review them carefully.'),
             behavior: SnackBarBehavior.floating,
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
@@ -190,6 +251,51 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
     }
   }
 
+  Widget _buildSelectedMedicationsList() {
+    final medications = context.watch<AppState>().medications;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (medications.isNotEmpty) ...[          
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              'Selected Medications',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: medications.map((med) => Chip(
+                label: Text(med['name'] as String),
+                onDeleted: () => context.read<AppState>().removeMedication(medications.indexOf(med)),
+                backgroundColor: med['color'] as Color?,
+              )).toList(),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ] else ...[
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: Text(
+                'Search and add medications to check for interactions',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final interactions = context.watch<AppState>().interactions;
@@ -206,296 +312,78 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          labelText: 'Search Medications',
-                          hintText: 'Enter drug name (e.g., Aspirin)',
-                          border: const OutlineInputBorder(),
-                          suffixIcon: _isLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(),
-                                )
-                              : const Icon(Icons.search),
-                        ),
-                        onChanged: _searchDrugs,
-                      ).animate().fadeIn().slideY(begin: -0.2, end: 0),
-                      if (_searchController.text.isNotEmpty &&
-                          _searchController.text.length < 3)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Text(
-                            'Enter at least 3 characters to search',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ).animate().fadeIn().slideY(begin: -0.2, end: 0),
-                  if (_searchResults.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Card(
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _searchResults.length,
-                        separatorBuilder: (context, index) => const Divider(),
-                        itemBuilder: (context, index) {
-                          final drug = _searchResults[index];
-                          return GestureDetector(
-                            onTap: () {
-                              context.read<AppState>().addMedication({
-                                'name': drug,
-                                'dosage': '1 tablet',
-                                'frequency': 'Daily',
-                                'time': '8:00 AM',
-                                'color': Colors.blue[100],
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Added $drug to medications'),
-                                  action: SnackBarAction(
-                                    label: 'Check Interactions',
-                                    onPressed: _checkInteractions,
-                                  ),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            },
-                            child: FutureBuilder<Map<String, dynamic>>(
-                              future: _drugInteractionService.getDrugInfo(drug),
-                              builder: (context, snapshot) {
-                                if (snapshot.hasError) {
-                                  return ListTile(
-                                    title: Text(drug),
-                                    subtitle: Text(
-                                      'Error loading drug information',
-                                      style: TextStyle(
-                                        color:
-                                            Theme.of(context).colorScheme.error,
-                                      ),
-                                    ),
-                                  );
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: const InputDecoration(
+                                labelText: 'Search Medications',
+                                hintText: 'Enter drug name (e.g., Aspirin)',
+                                border: OutlineInputBorder(),
+                              ),
+                              onSubmitted: (_) => _performSearch(),
+                              onChanged: (value) {
+                                if (value.isEmpty) {
+                                  setState(() {
+                                    _searchResults = [];
+                                  });
                                 }
-
-                                if (snapshot.connectionState ==
-                                    ConnectionState.waiting) {
-                                  return ListTile(
-                                    title: Text(drug),
-                                    trailing: const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(),
-                                    ),
-                                  );
-                                }
-
-                                final drugInfo = snapshot.data ?? {};
-                                return ListTile(
-                                  title: Text(drug),
-                                  subtitle: drugInfo.isNotEmpty
-                                      ? Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              '${drugInfo['generic_name']} • ${drugInfo['route']}',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.grey[600],
-                                              ),
-                                            ),
-                                            if (drugInfo['warnings'] != 'N/A')
-                                              Text(
-                                                'Warning: ${drugInfo['warnings']}',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .error,
-                                                ),
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                          ],
-                                        )
-                                      : Text(
-                                          'No detailed information available',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey[600],
-                                          ),
-                                        ),
-                                  trailing: drugInfo.isNotEmpty
-                                      ? Container(
-                                          constraints: const BoxConstraints(
-                                              maxWidth: 120),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Flexible(
-                                                child: Chip(
-                                                  label: Text(
-                                                    drugInfo['brand_name']
-                                                        as String,
-                                                    style: const TextStyle(
-                                                        fontSize: 12),
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                  backgroundColor:
-                                                      Theme.of(context)
-                                                          .colorScheme
-                                                          .surfaceVariant,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              const Icon(Icons.add),
-                                            ],
-                                          ),
-                                        )
-                                      : const Icon(Icons.add),
-                                );
                               },
                             ),
-                          );
-                        },
-                      ),
-                    ).animate().fadeIn().slideY(begin: 0.2, end: 0),
-                  ],
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: _isLoading ? null : _checkInteractions,
-                    icon: const Icon(Icons.health_and_safety),
-                    label: const Text('Check Interactions'),
-                  ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0),
-                  if (interactions.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        const Text(
-                          'Potential Interactions',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
                           ),
-                        ).animate().fadeIn().slideX(begin: -0.2, end: 0),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.info_outline),
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Severity Levels'),
-                                content: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _buildSeverityInfo(
-                                      'High',
-                                      'Potentially dangerous. Avoid combination.',
-                                      _drugInteractionService
-                                          .getSeverityColor('high'),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    _buildSeverityInfo(
-                                      'Medium',
-                                      'Monitor for side effects. Adjust if needed.',
-                                      _drugInteractionService
-                                          .getSeverityColor('medium'),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    _buildSeverityInfo(
-                                      'Low',
-                                      'Minor interaction. Monitor as usual.',
-                                      _drugInteractionService
-                                          .getSeverityColor('low'),
-                                    ),
-                                  ],
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: _performSearch,
+                            icon: const Icon(Icons.search),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildSelectedMedicationsList(),
+                      if (context.read<AppState>().medications.length >= 2)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16.0),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: _checkInteractions,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('Close'),
-                                  ),
-                                ],
                               ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    ...interactions.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final interaction = entry.value;
-                      final severity = interaction['severity'] as String;
-                      final color =
-                          _drugInteractionService.getSeverityColor(severity);
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              left: BorderSide(
-                                color: Color(
-                                    int.parse(color.substring(1), radix: 16) +
-                                        0xFF000000),
-                                width: 4,
+                              child: const Text(
+                                'Check Interactions',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                               ),
                             ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    '${interaction['drug1']} + ${interaction['drug2']}',
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Chip(
-                                    label: Text(
-                                      severity.toUpperCase(),
-                                      style:
-                                          const TextStyle(color: Colors.white),
-                                    ),
-                                    backgroundColor: Color(
-                                      int.parse(color.substring(1), radix: 16) +
-                                          0xFF000000,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                interaction['description'] as String,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
+                        ),
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_searchResults.isNotEmpty)
+                        _buildSearchResults(),
+                      if (interactions.isNotEmpty) ...[                        
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16.0),
+                          child: Text(
+                            'Potential Interactions',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                         ),
-                      )
-                          .animate(delay: Duration(milliseconds: 100 * index))
-                          .fadeIn()
-                          .slideX(begin: 0.2, end: 0);
-                    }),
-                  ],
+                        _buildInteractionResults(interactions),
+                      ],
+                    ],
+                  ),
                 ]),
               ),
             ),

@@ -49,7 +49,8 @@ class _AddMedicationDialogState extends State<AddMedicationDialog> {
         'dosage': _dosageController.text,
         'frequency': _frequency,
         'time': _formatTime(_time),
-        'color': Colors.blue[100],
+        'color': Theme.of(context).colorScheme.primaryContainer,
+        'added': DateTime.now(),
       };
 
       context.read<AppState>().addMedication(medication);

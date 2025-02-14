@@ -76,18 +76,18 @@ class ScanScreen extends StatelessWidget {
                           color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Column(
+                        child: const Column(
                           children: [
-                            const Icon(Icons.info_outline),
-                            const SizedBox(height: 8),
-                            const Text(
+                            Icon(Icons.info_outline),
+                            SizedBox(height: 8),
+                            Text(
                               'Tips for best results:',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            const Text(
+                            SizedBox(height: 8),
+                            Text(
                               '• Ensure good lighting\n'
                               '• Keep the prescription flat\n'
                               '• Capture all text clearly\n'
