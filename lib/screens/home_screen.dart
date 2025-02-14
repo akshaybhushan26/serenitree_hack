@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:serenitree_hack/screens/interaction_checker_screen.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_state.dart';
+import 'chatbot_screen.dart';
+import 'interaction_checker_screen.dart';
 import 'package:serenitree_hack/screens/scan_screen.dart';
 import '../main.dart';
 
@@ -155,6 +158,15 @@ class HomeScreen extends StatelessWidget {
           MaterialPageRoute(builder: (context) => const InteractionCheckerScreen()),
         ),
       },
+      {
+        'icon': Icons.chat,
+        'title': 'AI Assistant',
+        'description': 'Get help with medications',
+        'color': Colors.indigo,
+        'onTap': () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => const ChatbotScreen()),
+        ),
+      },
     ];
 
     return LayoutBuilder(
@@ -185,6 +197,10 @@ class HomeScreen extends StatelessWidget {
                   } else if (feature['title'] == 'Prescription Scanner') {
                     Navigator.of(context).push(
                       MaterialPageRoute(builder: (context) => const ScanScreen()),
+                    );
+                  } else if (feature['title'] == 'AI Assistant') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const ChatbotScreen()),
                     );
                   } else {
                     final screenIndex = {

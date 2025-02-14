@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:serenitree_hack/screens/camera_preview_screen.dart';
+import 'package:serenitree_hack/screens/chatbot_screen.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
@@ -149,6 +150,70 @@ class _ScanScreenState extends State<ScanScreen> {
     }
   }
 
+  Future<void> _showMedicationDetails(Map<String, String> medication) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(medication['name'] ?? 'Medication Details'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (medication['dosage'] != null) ...[                
+                Text('Dosage:', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(medication['dosage']!),
+                SizedBox(height: 8),
+              ],
+              if (medication['frequency'] != null) ...[                
+                Text('Frequency:', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(medication['frequency']!),
+                SizedBox(height: 8),
+              ],
+              if (medication['instructions'] != null) ...[                
+                Text('Instructions:', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(medication['instructions']!),
+                SizedBox(height: 8),
+              ],
+              if (medication['side_effects'] != null) ...[                
+                Text('Common Side Effects:', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(medication['side_effects']!),
+                SizedBox(height: 8),
+              ],
+              if (medication['warnings'] != null) ...[                
+                Text('Important Warnings:', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(medication['warnings']!),
+                SizedBox(height: 8),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Close'),
+          ),
+          TextButton(
+            onPressed: () {
+              final appState = Provider.of<AppState>(context, listen: false);
+              appState.addMedication(
+                name: medication['name'] ?? '',
+                dosage: medication['dosage'] ?? 'Not specified',
+                frequency: medication['frequency'] ?? 'Daily',
+                time: TimeOfDay(hour: 8, minute: 0)
+              );
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Medication added to your list')),
+              );
+            },
+            child: Text('Add to My Medications'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _processImage(XFile? image) async {
     if (image == null) return;
 
@@ -287,6 +352,7 @@ class _ScanScreenState extends State<ScanScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+
                       if (_isScanning)
                         const CircularProgressIndicator()
                       else
