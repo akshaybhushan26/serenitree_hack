@@ -19,11 +19,11 @@ class HomeScreen extends StatelessWidget {
               floating: true,
             ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),  // Adjusted padding
+              padding: const EdgeInsets.fromLTRB(12.0, 4.0, 12.0, 12.0),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   _buildWelcomeCard(context),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   _buildFeatureGrid(context),
                 ]),
               ),
@@ -164,8 +164,8 @@ class HomeScreen extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
             childAspectRatio: (constraints.maxWidth / 2 - 24) / ((constraints.maxWidth / 2 - 24) * 1.2),
           ),
           itemCount: features.length,
@@ -178,24 +178,30 @@ class HomeScreen extends StatelessWidget {
               ),
               child: InkWell(
                 onTap: () {
-                  final screenIndex = {
-                    'Medication Tracking': 1,
-                    'Therapy': 2,
-                    'Meditation': 3,
-                    'Prescription Scanner': 5,
-                  }[feature['title']];
-                  
-                  if (screenIndex != null) {
-                    Navigator.of(context).pushReplacement(
-                      PageRouteBuilder(
-                        pageBuilder: (context, animation, secondaryAnimation) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: MainScreen(initialIndex: screenIndex),
-                          );
-                        },
-                      ),
+                  if (feature['title'] == 'Interactions') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const InteractionCheckerScreen()),
                     );
+                  } else {
+                    final screenIndex = {
+                      'Medication Tracking': 1,
+                      'Therapy': 2,
+                      'Meditation': 3,
+                      'Prescription Scanner': 5,
+                    }[feature['title']];
+                    
+                    if (screenIndex != null) {
+                      Navigator.of(context).pushReplacement(
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation, secondaryAnimation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: MainScreen(initialIndex: screenIndex),
+                            );
+                          },
+                        ),
+                      );
+                    }
                   }
                 },
                 borderRadius: BorderRadius.circular(16),

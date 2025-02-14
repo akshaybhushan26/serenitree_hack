@@ -123,6 +123,42 @@ class MedicationListScreen extends StatelessWidget {
   Widget _buildMedicationList(BuildContext context) {
     final medications = context.watch<AppState>().medications;
 
+    if (medications.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.medication_outlined,
+              size: 64,
+              color: Colors.grey,
+            ).animate()
+              .scale(duration: 600.ms, curve: Curves.easeOutBack),
+            const SizedBox(height: 16),
+            const Text(
+              'No medications added yet',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ).animate()
+              .fadeIn()
+              .slideY(begin: 0.2, end: 0),
+            const SizedBox(height: 8),
+            const Text(
+              'Tap the + button to add medications',
+              style: TextStyle(
+                color: Colors.grey,
+              ),
+            ).animate()
+              .fadeIn(delay: 200.ms)
+              .slideY(begin: 0.2, end: 0),
+          ],
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
