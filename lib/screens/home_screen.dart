@@ -15,7 +15,7 @@ class HomeScreen extends StatelessWidget {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            const SliverAppBar(  // Changed from SliverAppBar.large to SliverAppBar
+            const SliverAppBar( 
               title: Text('SereniTree'),
               centerTitle: false,
               floating: true,

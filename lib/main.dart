@@ -5,9 +5,12 @@ import 'screens/home_screen.dart';
 import 'screens/medication_list_screen.dart';
 import 'screens/therapy_screen.dart';
 import 'screens/meditation_screen.dart';
+import 'screens/auth_screen.dart';
 import 'providers/app_state.dart';
+import 'providers/auth_provider.dart';
 import 'services/storage_service.dart';
 import 'services/audio_service.dart';
+import 'widgets/nature_background.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,12 +22,7 @@ void main() async {
   final audioService = AudioService();
   await audioService.initialize();
   
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => AppState(),
-      child: const MyApp(),
-    ),
-  );
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
@@ -57,17 +55,57 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SereniTree',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color.fromARGB(255, 76, 175, 167),
-          brightness: Brightness.light,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => AppState()),
+      ],
+      child: MaterialApp(
+        title: 'SereniTree',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color.fromARGB(255, 46, 125, 112),
+          ),
+          useMaterial3: true,
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: const Color(0xFF2E7D32)),
+            ),
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              elevation: 2,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
         ),
-        useMaterial3: true,
+        home: PageTransitionSwitcher(
+          transitionBuilder: (child, primaryAnimation, secondaryAnimation) {
+            return SharedAxisTransition(
+              animation: primaryAnimation,
+              secondaryAnimation: secondaryAnimation,
+              transitionType: SharedAxisTransitionType.scaled,
+              child: child,
+            );
+          },
+          child: const AuthScreen(),
+        ),
+        debugShowCheckedModeBanner: false,
       ),
-      home: const MainScreen(),
-      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -80,7 +118,7 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
   late int _selectedIndex;
 
   @override
@@ -99,16 +137,74 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(),
-      body: PageTransitionSwitcher(
-        transitionBuilder: (child, primaryAnimation, secondaryAnimation) {
-          return FadeThroughTransition(
-            animation: primaryAnimation,
-            secondaryAnimation: secondaryAnimation,
-            child: child,
-          );
-        },
-        child: _screens[_selectedIndex],
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // const Text(
+                //   'SereniTree',
+                //   style: TextStyle(
+                //     color: Colors.white,
+                //     fontWeight: FontWeight.bold,
+                //     fontSize: 20,
+                //   ),
+                // ),
+                
+                TextButton.icon(
+                  onPressed: () {
+                    context.read<AuthProvider>().logout();
+                    Navigator.of(context).pushReplacement(
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) => const AuthScreen(),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          return SharedAxisTransition(
+                            animation: animation,
+                            secondaryAnimation: secondaryAnimation,
+                            transitionType: SharedAxisTransitionType.scaled,
+                            child: child,
+                          );
+                        },
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.logout, color: Color.fromARGB(255, 0, 0, 0)),
+                  label: const Text(
+                    '',
+                    style: TextStyle(
+                      color: Color.fromARGB(255, 0, 0, 0),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      body: Stack(
+        children: [
+          NatureBackground(
+            numberOfLeaves: 10,
+            primaryColor: Theme.of(context).primaryColor.withOpacity(0.15),
+            secondaryColor: Theme.of(context).primaryColor.withOpacity(0.05),
+          ),
+          PageTransitionSwitcher(
+            transitionBuilder: (child, primaryAnimation, secondaryAnimation) {
+              return FadeThroughTransition(
+                animation: primaryAnimation,
+                secondaryAnimation: secondaryAnimation,
+                child: child,
+              );
+            },
+            child: _screens[_selectedIndex],
+          ),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
