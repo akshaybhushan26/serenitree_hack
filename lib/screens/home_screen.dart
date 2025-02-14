@@ -182,12 +182,15 @@ class HomeScreen extends StatelessWidget {
                     Navigator.of(context).push(
                       MaterialPageRoute(builder: (context) => const InteractionCheckerScreen()),
                     );
+                  } else if (feature['title'] == 'Prescription Scanner') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const ScanScreen()),
+                    );
                   } else {
                     final screenIndex = {
                       'Medication Tracking': 1,
                       'Therapy': 2,
                       'Meditation': 3,
-                      'Prescription Scanner': 5,
                     }[feature['title']];
                     
                     if (screenIndex != null) {

@@ -53,7 +53,12 @@ class _AddMedicationDialogState extends State<AddMedicationDialog> {
         'added': DateTime.now(),
       };
 
-      context.read<AppState>().addMedication(medication);
+      context.read<AppState>().addMedication(
+        name: medication['name'] as String,
+        dosage: medication['dosage'] as String,
+        frequency: medication['frequency'] as String,
+        time: _time,
+      );
       Navigator.pop(context);
     }
   }

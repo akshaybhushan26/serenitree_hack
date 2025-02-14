@@ -74,7 +74,7 @@ class _CameraPreviewScreenState extends State<CameraPreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isCameraInitialized || _controller == null) {
+    if (!_isCameraInitialized) {
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(),
@@ -83,60 +83,33 @@ class _CameraPreviewScreenState extends State<CameraPreviewScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: AspectRatio(
-                aspectRatio: _controller!.value.aspectRatio,
-                child: CameraPreview(_controller!),
-              ),
-            ),
-            Positioned(
-              left: 16,
-              top: 16,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
-              ).animate()
-                .fadeIn()
-                .scale(delay: 200.ms),
-            ),
-            Positioned(
-              bottom: 32,
-              left: 0,
-              right: 0,
-              child: Column(
-                children: [
-                  const Text(
-                    'Position prescription within frame',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                    ),
-                  ).animate()
-                    .fadeIn()
-                    .slideY(begin: 0.2, end: 0),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      FloatingActionButton.large(
-                        onPressed: _captureImage,
-                        child: _isCapturing
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Icon(Icons.camera, size: 32),
-                      ).animate()
-                        .fadeIn()
-                        .scale(delay: 400.ms),
-                    ],
+      body: Stack(
+        children: [
+          CameraPreview(_controller!),
+          Positioned(
+            bottom: 32,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                    size: 32,
                   ),
-                ],
-              ),
+                ),
+                FloatingActionButton(
+                  onPressed: _isCapturing ? null : () => _captureImage(),
+                  child: Icon(_isCapturing ? Icons.hourglass_empty : Icons.camera),
+                ),
+                const SizedBox(width: 64), // For balance
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

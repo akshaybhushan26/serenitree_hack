@@ -19,8 +19,13 @@ class AppState extends ChangeNotifier {
   final List<Map<String, dynamic>> _medications = [];
   List<Map<String, dynamic>> get medications => _medications;
 
-  void addMedication(Map<String, dynamic> medication) {
-    _medications.add(medication);
+  void addMedication({required String name, required String dosage, required String frequency, required TimeOfDay time}) {
+    _medications.add({
+      'name': name,
+      'dosage': dosage,
+      'frequency': frequency,
+      'time': '${time.hourOfPeriod}:${time.minute.toString().padLeft(2, '0')} ${time.period == DayPeriod.am ? 'AM' : 'PM'}',
+    });
     notifyListeners();
   }
 
