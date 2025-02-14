@@ -32,7 +32,8 @@ class AIService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['choices'][0]['message']['content'];
+        final content = data['choices'][0]['message']['content'];
+        return content;
       } else {
         final error = jsonDecode(response.body);
         throw Exception(error['error']['message'] ?? 'Failed to get response from AI');

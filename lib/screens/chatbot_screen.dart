@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../services/ai_service.dart';
+import '../services/storage_service.dart';
 
 class ChatbotScreen extends StatefulWidget {
   final String? medicationName;
@@ -18,10 +19,12 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
   final _aiService = AIService();
+  final StorageService _storageService = StorageService();
 
   @override
   void initState() {
     super.initState();
+    _loadChatHistory();
     if (widget.medicationName != null) {
       _addBotMessage('Hello! I can help you with information about ${widget.medicationName}. What would you like to know?');
     } else {
@@ -29,30 +32,41 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     }
   }
 
+  Future<void> _loadChatHistory() async {
+    final history = await _storageService.getChatHistory();
+    setState(() {
+      _messages.addAll(history);
+    });
+  }
+
+  void _addBotMessage(String message) {
+    final botMessage = {
+      'isUser': false,
+      'message': message,
+      'timestamp': DateTime.now(),
+    };
+    setState(() {
+      _messages.add(botMessage);
+    });
+    _storageService.saveChatMessage(botMessage);
+  }
+
+  void _addUserMessage(String message) {
+    final userMessage = {
+      'isUser': true,
+      'message': message,
+      'timestamp': DateTime.now(),
+    };
+    setState(() {
+      _messages.add(userMessage);
+    });
+    _storageService.saveChatMessage(userMessage);
+  }
+
   @override
   void dispose() {
     _messageController.dispose();
     super.dispose();
-  }
-
-  void _addBotMessage(String message) {
-    setState(() {
-      _messages.add({
-        'isUser': false,
-        'message': message,
-        'timestamp': DateTime.now(),
-      });
-    });
-  }
-
-  void _addUserMessage(String message) {
-    setState(() {
-      _messages.add({
-        'isUser': true,
-        'message': message,
-        'timestamp': DateTime.now(),
-      });
-    });
   }
 
   Future<void> _handleUserMessage(String message) async {

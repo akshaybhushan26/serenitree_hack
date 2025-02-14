@@ -42,7 +42,7 @@ class _AddMedicationDialogState extends State<AddMedicationDialog> {
     return '$hour:$minute $period';
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (_formKey.currentState?.validate() ?? false) {
       final medication = {
         'name': _nameController.text,
@@ -53,7 +53,7 @@ class _AddMedicationDialogState extends State<AddMedicationDialog> {
         'added': DateTime.now(),
       };
 
-      context.read<AppState>().addMedication(
+      await context.read<AppState>().addMedication(
         name: medication['name'] as String,
         dosage: medication['dosage'] as String,
         frequency: medication['frequency'] as String,

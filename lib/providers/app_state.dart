@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:serenitree_hack/services/storage_service.dart';
 
 class AppState extends ChangeNotifier {
   // Theme colors
@@ -18,24 +19,48 @@ class AppState extends ChangeNotifier {
   // Medications
   final List<Map<String, dynamic>> _medications = [];
   List<Map<String, dynamic>> get medications => _medications;
+  final StorageService _storageService = StorageService();
 
-  void addMedication({required String name, required String dosage, required String frequency, required TimeOfDay time}) {
-    _medications.add({
+  AppState() {
+    _initializeStorage();
+  }
+
+  Future<void> _initializeStorage() async {
+    await _storageService.initializeHive();
+    await _loadMedications();
+  }
+
+  Future<void> _loadMedications() async {
+    final meds = await _storageService.getAllMedications();
+    _medications.addAll(meds);
+    notifyListeners();
+  }
+
+  Future<void> addMedication({required String name, required String dosage, required String frequency, required TimeOfDay time}) async {
+    final medication = {
       'name': name,
       'dosage': dosage,
       'frequency': frequency,
       'time': '${time.hourOfPeriod}:${time.minute.toString().padLeft(2, '0')} ${time.period == DayPeriod.am ? 'AM' : 'PM'}',
-    });
+    };
+    _medications.add(medication);
+    await _storageService.saveMedication(name, medication);
     notifyListeners();
   }
 
-  void removeMedication(int index) {
+  Future<void> removeMedication(int index) async {
+    final medication = _medications[index];
     _medications.removeAt(index);
+    await _storageService.clearAllData(); // Since Hive doesn't support individual deletions easily
+    for (var med in _medications) {
+      await _storageService.saveMedication(med['name'], med);
+    }
     notifyListeners();
   }
 
-  void updateMedication(int index, Map<String, dynamic> medication) {
+  Future<void> updateMedication(int index, Map<String, dynamic> medication) async {
     _medications[index] = medication;
+    await _storageService.saveMedication(medication['name'], medication);
     notifyListeners();
   }
 

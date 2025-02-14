@@ -8,8 +8,14 @@ import 'screens/meditation_screen.dart';
 import 'screens/scan_screen.dart';
 import 'screens/interaction_checker_screen.dart';
 import 'providers/app_state.dart';
+import 'services/storage_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  final storageService = StorageService();
+  await storageService.initializeHive();
+  
   runApp(
     ChangeNotifierProvider(
       create: (_) => AppState(),
