@@ -60,13 +60,12 @@ class _MainScreenState extends State<MainScreen> {
     const MedicationListScreen(),
     const TherapyScreen(),
     const MeditationScreen(),
-    const InteractionCheckerScreen(),
-    const ScanScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(),
       body: PageTransitionSwitcher(
         transitionBuilder: (child, primaryAnimation, secondaryAnimation) {
           return FadeThroughTransition(
@@ -104,16 +103,6 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icon(Icons.self_improvement_outlined),
             selectedIcon: Icon(Icons.self_improvement),
             label: 'Meditation',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.health_and_safety_outlined),
-            selectedIcon: Icon(Icons.health_and_safety),
-            label: 'Interactions',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.document_scanner_outlined),
-            selectedIcon: Icon(Icons.document_scanner),
-            label: 'Scan',
           ),
         ],
       ),

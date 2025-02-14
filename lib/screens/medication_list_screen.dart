@@ -141,23 +141,30 @@ class MedicationListScreen extends StatelessWidget {
           final medication = entry.value;
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Dismissible(
-              key: Key(medication['name'] as String),
-              background: Container(
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 16),
-                child: const Icon(
-                  Icons.delete,
-                  color: Colors.white,
-                ),
-              ),
-              direction: DismissDirection.endToStart,
-              onDismissed: (direction) {
-                context.read<AppState>().removeMedication(index);
+            child: GestureDetector(
+              onLongPress: () {
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: const Text('Delete Medication'),
+                      content: const Text('Are you sure you want to delete this medication?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            context.read<AppState>().removeMedication(index);
+                          },
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    );
+                  },
+                );
               },
               child: Card(
                 elevation: 2,

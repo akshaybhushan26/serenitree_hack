@@ -277,7 +277,28 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
               runSpacing: 8,
               children: medications.map((med) => Chip(
                 label: Text(med['name'] as String),
-                onDeleted: () => context.read<AppState>().removeMedication(medications.indexOf(med)),
+                onDeleted: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Delete Medication'),
+                      content: const Text('Are you sure you want to delete this medication?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) {
+                    context.read<AppState>().removeMedication(medications.indexOf(med));
+                  }
+                },
                 backgroundColor: med['color'] as Color?,
               )).toList(),
             ),

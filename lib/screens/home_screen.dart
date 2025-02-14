@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:serenitree_hack/screens/interaction_checker_screen.dart';
+import 'package:serenitree_hack/screens/scan_screen.dart';
 import '../main.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -11,11 +13,13 @@ class HomeScreen extends StatelessWidget {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            const SliverAppBar.large(
-              title: Text('SereniTree'),
+            const SliverAppBar(  // Changed from SliverAppBar.large to SliverAppBar
+              // title: Text('SereniTree'),
+              centerTitle: false,
+              floating: true,
             ),
             SliverPadding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),  // Adjusted padding
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   _buildWelcomeCard(context),
@@ -88,24 +92,68 @@ class HomeScreen extends StatelessWidget {
         'title': 'Medication Tracking',
         'description': 'Keep track of your medications',
         'color': Colors.blue,
+        'onTap': () {
+          Navigator.of(context).pushReplacement(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: MainScreen(initialIndex: 1),
+                );
+              },
+            ),
+          );
+        },
       },
       {
         'icon': Icons.psychology,
         'title': 'Therapy',
         'description': 'Access therapeutic exercises and resources',
         'color': Colors.purple,
+'onTap': () => Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) {
+              return FadeTransition(
+                opacity: animation,
+                child: MainScreen(initialIndex: 2),
+              );
+            },
+          ),
+        ),
       },
       {
         'icon': Icons.self_improvement,
         'title': 'Meditation',
         'description': 'Practice mindfulness and meditation',
         'color': Colors.orange,
+'onTap': () => Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) {
+              return FadeTransition(
+                opacity: animation,
+                child: MainScreen(initialIndex: 3),
+              );
+            },
+          ),
+        ),
       },
       {
         'icon': Icons.document_scanner,
         'title': 'Prescription Scanner',
         'description': 'Scan and analyze your prescriptions',
         'color': Colors.green,
+        'onTap': () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => const ScanScreen()),
+        ),
+      },
+      {
+        'icon': Icons.health_and_safety_outlined,
+        'title': 'Interactions',
+        'description': 'Check medication interactions',
+        'color': Colors.teal,
+        'onTap': () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => const InteractionCheckerScreen()),
+        ),
       },
     ];
 
